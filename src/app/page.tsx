@@ -1,65 +1,111 @@
-import Image from "next/image";
+"use client";
+
+import Header from "@/components/Header";
+import Link from "next/link";
+import { Wand2, ListOrdered, Volume2, ArrowRight } from "lucide-react";
+
+const TOOLS = [
+  {
+    title: "Manhwa / Manga Script Rewriter",
+    description:
+      "Paste a YouTube transcript and get a completely rewritten, original script. Every page covered — nothing skipped.",
+    href: "/rewriter",
+    icon: Wand2,
+    gradient: "from-primary to-accent",
+    tags: ["Paste Transcript", "100% Original", "No Pages Skipped"],
+  },
+  {
+    title: "Top 10 Anime Script Generator",
+    description:
+      "Select a category like \"Top 10 Overpowered MC Anime\" or create your own, and get a full YouTube-ready script generated from scratch.",
+    href: "/top10",
+    icon: ListOrdered,
+    gradient: "from-pink-500 to-orange-500",
+    tags: ["Pick a Category", "AI Generated", "YouTube Ready"],
+  },
+  {
+    title: "AI Audio Generator",
+    description:
+      "Turn your script into cinematic AI voiceover. Tone-aware voice switching for battle, shock, and dark moments. Powered by OpenAI TTS.",
+    href: "/audio",
+    icon: Volume2,
+    gradient: "from-violet-500 to-fuchsia-600",
+    tags: ["Script to Audio", "Cinematic Voice", "Auto Tone Detection"],
+  },
+];
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="min-h-screen flex flex-col">
+      <Header />
+
+      <main className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 py-16">
+        {/* Hero */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl sm:text-5xl font-bold bg-gradient-to-r from-primary via-accent to-pink-500 bg-clip-text text-transparent mb-4">
+            Shadow Senpai Studio
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-lg text-muted max-w-xl mx-auto">
+            Your AI-powered toolkit for creating YouTube-ready anime &amp; manga
+            scripts. Choose a tool below to get started.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        {/* Tool Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl w-full">
+          {TOOLS.map((tool) => {
+            const Icon = tool.icon;
+            return (
+              <Link
+                key={tool.href}
+                href={tool.href}
+                className="group relative rounded-2xl border border-card-border bg-card p-6 hover:border-primary/50 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10"
+              >
+                {/* Icon */}
+                <div
+                  className={`w-14 h-14 rounded-xl bg-gradient-to-br ${tool.gradient} flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300`}
+                >
+                  <Icon className="w-7 h-7 text-white" />
+                </div>
+
+                {/* Content */}
+                <h2 className="text-xl font-bold text-foreground mb-2 group-hover:text-primary transition-colors">
+                  {tool.title}
+                </h2>
+                <p className="text-sm text-muted leading-relaxed mb-5">
+                  {tool.description}
+                </p>
+
+                {/* Tags */}
+                <div className="flex flex-wrap gap-2 mb-5">
+                  {tool.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="text-xs px-2.5 py-1 rounded-full bg-white/5 text-muted border border-card-border"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+
+                {/* CTA */}
+                <div className="flex items-center gap-2 text-sm font-semibold text-primary group-hover:gap-3 transition-all">
+                  Open Tool
+                  <ArrowRight className="w-4 h-4" />
+                </div>
+              </Link>
+            );
+          })}
         </div>
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-card-border py-4 text-center">
+        <p className="text-xs text-muted">
+          Shadow Senpai Studio — Your scripts stay private. API calls go directly
+          from your browser to the AI provider.
+        </p>
+      </footer>
     </div>
   );
 }
