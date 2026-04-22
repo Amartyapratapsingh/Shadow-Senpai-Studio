@@ -191,7 +191,7 @@ export default function Top10Page() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           {/* Left: AI Config only */}
           <div className="lg:col-span-1">
-            <div className="rounded-2xl border border-card-border bg-card p-5 sticky top-24">
+            <div className="rounded-2xl glass-card p-5 sticky top-24">
               <AIProviderSelector config={aiConfig} onChange={setAIConfig} />
             </div>
           </div>
@@ -199,7 +199,7 @@ export default function Top10Page() {
           {/* Right: Topic + Options */}
           <div className="lg:col-span-2 space-y-4">
             {/* Topic Selection Card */}
-            <div className="rounded-2xl border border-card-border bg-card p-5">
+            <div className="rounded-2xl glass-card p-5">
               {/* Toggle Tabs */}
               <div className="flex flex-wrap gap-2 mb-5">
                 <button
@@ -330,7 +330,7 @@ export default function Top10Page() {
             {/* Duration + Narration Style + CTA — below the topic area */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {/* Video Duration */}
-              <div className="rounded-2xl border border-card-border bg-card p-4">
+              <div className="rounded-2xl glass-card p-4">
                 <label className="block text-xs text-muted mb-1.5">
                   Video Duration
                 </label>
@@ -349,7 +349,7 @@ export default function Top10Page() {
               </div>
 
               {/* Narration Style */}
-              <div className="rounded-2xl border border-card-border bg-card p-4">
+              <div className="rounded-2xl glass-card p-4">
                 <label className="block text-xs text-muted mb-1.5">
                   Narration Style
                 </label>
@@ -368,7 +368,7 @@ export default function Top10Page() {
               </div>
 
               {/* Custom CTA */}
-              <div className="rounded-2xl border border-card-border bg-card p-4">
+              <div className="rounded-2xl glass-card p-4">
                 <div className="flex items-center gap-2 mb-1.5">
                   <Megaphone className="w-3.5 h-3.5 text-pink-400" />
                   <label className="text-xs text-muted">
@@ -423,7 +423,7 @@ export default function Top10Page() {
 
         {/* Generated Script Output */}
         {script && (
-          <div className="rounded-2xl border border-success/30 bg-card overflow-hidden">
+          <div className="rounded-2xl glass-card border border-success/20 overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-card-border">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-success/20 flex items-center justify-center">
@@ -503,7 +503,7 @@ export default function Top10Page() {
         )}
       </main>
 
-      <footer className="border-t border-card-border py-4 text-center">
+      <footer className="py-6 text-center">
         <p className="text-xs text-muted">
           Shadow Senpai Studio — Your scripts stay private.
         </p>

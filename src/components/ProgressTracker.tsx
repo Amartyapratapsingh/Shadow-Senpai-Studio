@@ -48,7 +48,7 @@ function ChunkCard({ result }: { result: ChunkResult }) {
 
   return (
     <div
-      className={`rounded-xl border ${statusBorder} bg-card overflow-hidden transition-all duration-300`}
+      className={`rounded-xl ${statusBorder} glass-card overflow-hidden transition-all duration-300`}
     >
       {/* Header */}
       <button

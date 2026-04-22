@@ -198,7 +198,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Currency Selector */}
-          <div className="rounded-2xl border border-card-border bg-card p-5">
+          <div className="rounded-2xl glass-card p-5">
             <div className="flex items-center gap-2 mb-4">
               <Globe className="w-4 h-4 text-primary" />
               <h3 className="text-sm font-semibold text-foreground">
@@ -368,7 +368,7 @@ export default function SettingsPage() {
         </div>
       </main>
 
-      <footer className="border-t border-card-border py-4 text-center">
+      <footer className="py-6 text-center">
         <p className="text-xs text-muted">
           Shadow Senpai Studio — Keys are stored in your browser only.
         </p>

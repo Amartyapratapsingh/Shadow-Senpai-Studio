@@ -272,7 +272,7 @@ export default function RewriterPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           <div className="lg:col-span-1">
-            <div className="rounded-2xl border border-card-border bg-card p-5 sticky top-24">
+            <div className="rounded-2xl glass-card p-5 sticky top-24">
               <AIProviderSelector
                 config={aiConfig}
                 onChange={setAIConfig}
@@ -280,7 +280,7 @@ export default function RewriterPage() {
             </div>
           </div>
           <div className="lg:col-span-2">
-            <div className="rounded-2xl border border-card-border bg-card p-5">
+            <div className="rounded-2xl glass-card p-5">
               <TranscriptInput
                 transcript={transcript}
                 onChange={setTranscript}
@@ -309,7 +309,7 @@ export default function RewriterPage() {
 
             {/* Duration selector — only for generate mode */}
             {!hasTranscript && (
-              <div className="mt-4 rounded-2xl border border-card-border bg-card p-4">
+              <div className="mt-4 rounded-2xl glass-card p-4">
                 <label className="block text-xs text-muted mb-1.5">
                   Video Duration
                 </label>
@@ -411,7 +411,7 @@ export default function RewriterPage() {
         )}
 
         {generatedScript && (
-          <div className="rounded-2xl border border-success/30 bg-card overflow-hidden">
+          <div className="rounded-2xl glass-card border border-success/20 overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-card-border">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-success/20 flex items-center justify-center">
@@ -495,7 +495,7 @@ export default function RewriterPage() {
           )}
       </main>
 
-      <footer className="border-t border-card-border py-4 text-center">
+      <footer className="py-6 text-center">
         <p className="text-xs text-muted">
           Shadow Senpai Studio — Your scripts stay private.
         </p>

@@ -46,7 +46,7 @@ export default function OutputSection({ results }: Props) {
   const totalWords = fullScript.split(/\s+/).filter((w) => w.length > 0).length;
 
   return (
-    <div className="rounded-2xl border border-success/30 bg-card overflow-hidden">
+    <div className="rounded-2xl glass-card border border-success/20 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-card-border">
         <div className="flex items-center gap-3">

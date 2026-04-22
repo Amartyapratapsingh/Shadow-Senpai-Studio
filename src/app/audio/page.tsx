@@ -230,7 +230,7 @@ export default function AudioPage() {
         </div>
 
         {/* ═══════ VOICE PRESETS ═══════ */}
-        <div className="rounded-2xl border border-card-border bg-card p-5 mb-4">
+        <div className="rounded-2xl glass-card p-5 mb-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <BookmarkCheck className="w-4 h-4 text-amber-400" />
@@ -336,7 +336,7 @@ export default function AudioPage() {
         </div>
 
         {/* ── Voice Selection ── */}
-        <div className="rounded-2xl border border-card-border bg-card p-5 mb-4">
+        <div className="rounded-2xl glass-card p-5 mb-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Mic className="w-4 h-4 text-violet-400" />
@@ -361,7 +361,7 @@ export default function AudioPage() {
         </div>
 
         {/* ── Script Input ── */}
-        <div className="rounded-2xl border border-card-border bg-card p-5 mb-4">
+        <div className="rounded-2xl glass-card p-5 mb-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-foreground">Script</h3>
             <div className="flex items-center gap-2">
@@ -407,7 +407,7 @@ export default function AudioPage() {
 
         {/* ── Audio Player ── */}
         {audioUrl && (
-          <div className="rounded-2xl border border-success/30 bg-card p-6">
+          <div className="rounded-2xl glass-card border border-success/20 p-6">
             <div className="flex items-center gap-3 mb-5">
               <div className="w-10 h-10 rounded-xl bg-success/20 flex items-center justify-center">
                 <Volume2 className="w-5 h-5 text-success" />
@@ -453,7 +453,7 @@ export default function AudioPage() {
         )}
       </main>
 
-      <footer className="border-t border-card-border py-4 text-center">
+      <footer className="py-6 text-center">
         <p className="text-xs text-muted">Shadow Senpai Studio — Audio powered by OpenAI & Gemini TTS.</p>
       </footer>
     </div>
