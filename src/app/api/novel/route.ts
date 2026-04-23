@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AIConfig } from "@/lib/types";
-import { getNovelScriptPrompt, getScenePlanPrompt, getImagePromptForScene } from "@/lib/novel-prompts";
+import { getNovelScriptPrompt, getSmartSceneBreakPrompt, getImagePromptForScene } from "@/lib/novel-prompts";
 
 export const maxDuration = 300;
 
@@ -73,52 +73,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ script: result });
     }
 
-    // ── Action 2: PASS 1 — Scene Planning (reads entire script, outputs compact scene breaks) ──
-    if (action === "plan-scenes") {
-      if (!script?.trim()) return NextResponse.json({ error: "Script required" }, { status: 400 });
-      const prompt = getScenePlanPrompt(script);
-      // Use higher max tokens for scene planning with large scripts
-      const result = await callAI(config, prompt, 8192);
+    // ── Action 2: Smart Scene Break — AI reads ~3000 word chunk, finds natural breaks ──
+    if (action === "smart-scene-break") {
+      if (!script?.trim()) return NextResponse.json({ error: "Script chunk required" }, { status: 400 });
+      const chunkIndex = body.chunkIndex || 1;
+      const totalChunks = body.totalChunks || 1;
+      const prompt = getSmartSceneBreakPrompt(script, chunkIndex, totalChunks);
+
+      let result: string;
+      try {
+        result = await callAI(config, prompt, 8192);
+      } catch (err: unknown) {
+        return NextResponse.json({ error: `AI scene break failed: ${err instanceof Error ? err.message : "Unknown"}` }, { status: 500 });
+      }
 
       if (!result || result.trim().length === 0) {
-        return NextResponse.json({ error: "AI returned empty response for scene planning" }, { status: 500 });
+        return NextResponse.json({ error: "AI returned empty response" }, { status: 500 });
       }
 
       try {
-        const scenes = extractJSON(result) as { scene: number; firstWords: string; description: string }[];
-        if (!Array.isArray(scenes) || scenes.length === 0) throw new Error("Empty scenes");
+        const scenes = extractJSON(result) as { narration: string; imageDescription: string }[];
+        if (!Array.isArray(scenes) || scenes.length === 0) throw new Error("Empty");
         return NextResponse.json({ scenes });
       } catch {
-        return NextResponse.json({ error: "Failed to parse scene plan. AI response was not valid JSON." }, { status: 500 });
+        return NextResponse.json({ error: "AI response was not valid JSON. Retrying may help." }, { status: 500 });
       }
     }
 
-    // ── Action 3: PASS 2 — Generate image prompt for a single scene ──
+    // ── Action 3: Generate image prompt for one scene ──
     if (action === "image-prompt") {
       if (!narration?.trim()) return NextResponse.json({ error: "Narration required" }, { status: 400 });
       const prompt = getImagePromptForScene(narration, sceneNumber || 1, totalScenes || 1, characterRef);
-      const result = await callAI(config, prompt, 1024);
+      const result = await callAI(config, prompt, 512);
       return NextResponse.json({ imagePrompt: result.trim() });
-    }
-
-    // ── Legacy: split-panels (keep for backward compat) ──
-    if (action === "split-panels") {
-      if (!script?.trim()) return NextResponse.json({ error: "Script required" }, { status: 400 });
-      // Redirect to scene planning
-      const prompt = getScenePlanPrompt(script);
-      const result = await callAI(config, prompt, 8192);
-      try {
-        const scenes = extractJSON(result) as { scene: number; firstWords: string; description: string }[];
-        // Convert scenes to panels format
-        const panels = scenes.map(s => ({
-          panel: s.scene,
-          narration: s.firstWords + "...",
-          imagePrompt: `Anime art style, 16:9 cinematic widescreen illustration. ${s.description}`,
-        }));
-        return NextResponse.json({ panels });
-      } catch {
-        return NextResponse.json({ error: "Failed to parse scenes" }, { status: 500 });
-      }
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });

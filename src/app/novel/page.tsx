@@ -7,7 +7,7 @@ import { NOVEL_GENRES, NovelGenre } from "@/lib/novel-genres";
 import { addTextUsage, addTTSUsage, estimateTokens, loadDefaultVoice } from "@/lib/usage";
 import { getApiKey } from "@/lib/api-keys";
 import { AudioProvider } from "@/lib/audio-utils";
-import { splitIntoScenes } from "@/lib/scene-splitter";
+import { roughSplitIntoChunks, fallbackSplitIntoScenes } from "@/lib/scene-splitter";
 import {
   ArrowLeft, Film, Sparkles, Loader2, AlertCircle, Image as ImageIcon,
   Volume2, FileText, Check, ChevronDown, ChevronUp, Download, Pencil,
@@ -320,56 +320,93 @@ export default function NovelPage() {
       return chunks;
     };
 
-    // ═══════════════════════════════════════════════════════════
-    //  CLIENT-SIDE SCENE SPLITTING (FREE) + TINY AI IMAGE PROMPTS
-    // ═══════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════
+    //  HYBRID: Client rough-split (FREE) + AI smart scene breaks (CHEAP)
+    // ══════════════════════════════════════════════════════════════
 
     // ── STEP 2: PANELS ──
-    // Scene splitting: done in browser (FREE, instant, any script size)
-    // Image prompts: tiny AI call per scene (~150 words in, ~50 words out)
     let panelResult: Panel[] | null = null as Panel[] | null;
     {
       setPanelStatus("running");
+      const config = getScriptConfig();
+
       try {
-        // FREE client-side scene splitting — no AI needed
-        const scenes = splitIntoScenes(finalScript, 150); // ~150 words = ~1 minute per scene
-        console.log(`Client-side split: ${scenes.length} scenes from ${finalScript.split(/\s+/).length} words (FREE)`);
-
+        const totalWords = finalScript.split(/\s+/).length;
         const allPanels: Panel[] = [];
-        const config = getScriptConfig();
 
-        for (let i = 0; i < scenes.length; i++) {
-          const scene = scenes[i];
+        if (config) {
+          // ── HYBRID APPROACH ──
+          // Step A: Client-side rough split into ~3000 word chunks (FREE)
+          const chunks = roughSplitIntoChunks(finalScript, 3000);
+          console.log(`Hybrid split: ${totalWords} words → ${chunks.length} chunks (FREE) → AI scene detection`);
 
-          // Generate image prompt — small AI call (~150 words input, ~50 words output = CHEAP)
-          let imagePrompt = `Anime art style, 16:9 cinematic widescreen illustration. Scene from a story.`;
-
-          if (config) {
+          // Step B: For each chunk, AI finds natural scene breaks (CHEAP — ~3000 words per call)
+          for (let c = 0; c < chunks.length; c++) {
             try {
-              const promptRes = await fetch("/api/novel", {
+              console.log(`AI scene break: chunk ${c + 1}/${chunks.length} (${chunks[c].split(/\s+/).length} words)`);
+              const res = await fetch("/api/novel", {
                 method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                  action: "image-prompt", config,
-                  narration: scene.narration.slice(0, 1000), // only send ~150-200 words
-                  sceneNumber: i + 1, totalScenes: scenes.length,
+                  action: "smart-scene-break", config,
+                  script: chunks[c],
+                  chunkIndex: c + 1, totalChunks: chunks.length,
                 }),
               });
-              if (promptRes.ok) {
-                const pData = await promptRes.json();
-                if (pData.imagePrompt) imagePrompt = pData.imagePrompt;
-                addTextUsage(config.model, estimateTokens(scene.narration.slice(0, 1000)), estimateTokens(imagePrompt));
+
+              if (res.ok) {
+                const data = await res.json();
+                if (data.scenes && Array.isArray(data.scenes)) {
+                  for (const scene of data.scenes) {
+                    allPanels.push({
+                      panel: allPanels.length + 1,
+                      narration: scene.narration || "",
+                      imagePrompt: `Anime art style, 16:9 cinematic widescreen illustration. ${scene.imageDescription || "Scene from the story."}`,
+                      imageStatus: "pending" as const,
+                    });
+                  }
+                  setPanels([...allPanels]);
+                  addTextUsage(config.model, estimateTokens(chunks[c]), estimateTokens(JSON.stringify(data.scenes)));
+                }
+              } else {
+                // If AI fails for this chunk, use client-side fallback for just this chunk
+                console.warn(`AI failed for chunk ${c + 1}, using fallback`);
+                const fallbackScenes = fallbackSplitIntoScenes(chunks[c], 150);
+                for (const fs of fallbackScenes) {
+                  allPanels.push({
+                    panel: allPanels.length + 1,
+                    narration: fs.narration,
+                    imagePrompt: `Anime art style, 16:9 cinematic widescreen illustration. A scene from the story.`,
+                    imageStatus: "pending" as const,
+                  });
+                }
+                setPanels([...allPanels]);
               }
-            } catch { /* use default prompt */ }
+            } catch {
+              // Fallback for this chunk
+              const fallbackScenes = fallbackSplitIntoScenes(chunks[c], 150);
+              for (const fs of fallbackScenes) {
+                allPanels.push({
+                  panel: allPanels.length + 1,
+                  narration: fs.narration,
+                  imagePrompt: `Anime art style, 16:9 cinematic widescreen illustration. A scene from the story.`,
+                  imageStatus: "pending" as const,
+                });
+              }
+              setPanels([...allPanels]);
+            }
           }
-
-          allPanels.push({
-            panel: i + 1,
-            narration: scene.narration,
-            imagePrompt,
-            imageStatus: "pending" as const,
-          });
-
-          // Show panels appearing one by one
+        } else {
+          // No AI key — pure client-side fallback (FREE but dumber scene breaks)
+          console.log(`No AI key — pure client-side split (${totalWords} words)`);
+          const fallbackScenes = fallbackSplitIntoScenes(finalScript, 150);
+          for (const fs of fallbackScenes) {
+            allPanels.push({
+              panel: allPanels.length + 1,
+              narration: fs.narration,
+              imagePrompt: `Anime art style, 16:9 cinematic widescreen illustration. A scene from the story.`,
+              imageStatus: "pending" as const,
+            });
+          }
           setPanels([...allPanels]);
         }
 
@@ -377,11 +414,11 @@ export default function NovelPage() {
           setPanelStatus("done");
           panelResult = allPanels;
         } else {
-          setError("No scenes could be created from the script.");
+          setError("No scenes could be created.");
           setPanelStatus("error");
         }
       } catch (err: unknown) {
-        setError(`Scene split error: ${err instanceof Error ? err.message : "Unknown"}`);
+        setError(`Scene error: ${err instanceof Error ? err.message : "Unknown"}`);
         setPanelStatus("error");
       }
     }

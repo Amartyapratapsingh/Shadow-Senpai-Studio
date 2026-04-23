@@ -1,10 +1,10 @@
 /**
- * Novel Video Creation — Two-Pass Smart Scene Splitting
+ * Novel Video Creation Prompts
  *
- * Pass 1: AI reads ENTIRE script and outputs scene break positions
- * Pass 2: For each scene, AI generates image prompt
- *
- * This ensures NO scene is cut, NO content is lost, NO repetition.
+ * HYBRID approach:
+ * - Client-side rough split into ~3000 word chunks (FREE)
+ * - AI reads each chunk and detects natural scene breaks (CHEAP)
+ * - AI generates image prompts per scene (CHEAP)
  */
 
 export function getNovelScriptPrompt(
@@ -25,79 +25,88 @@ RULES:
 - Write ONLY the spoken narration. No headers, labels, brackets, quotes, or formatting.
 - Write in a ${style} style.
 - Write in the SAME language as the novel name.
-- Cover the story scene by scene with rich visual and emotional detail.
+- Cover the story scene by scene.
 - The script should be 1500-2500 words.
 - Make it sound natural for a YouTube video narration.
-- DO NOT change the story. Stay faithful to the original plot.
+- Stay faithful to the original plot.
 
 Write the full script now:`;
 }
 
 /**
- * PASS 1: Scene Planning
- * AI reads the ENTIRE script and outputs scene break positions.
- * Output is COMPACT — just scene numbers + first few words + description.
- * The actual narration text is extracted client-side.
+ * AI SCENE DETECTION — reads a ~3000 word chunk and finds natural scene breaks.
+ *
+ * The AI splits BY MEANING, not by word count:
+ * - Location changes
+ * - Time jumps (next day, later that night)
+ * - New character enters
+ * - Mood/tone shifts
+ * - Action changes (fight starts, conversation begins)
+ *
+ * Output: Array of scenes with the EXACT narration text + image description.
+ * Cost: ~3000 tokens input, ~2000 tokens output per chunk = CHEAP
  */
-export function getScenePlanPrompt(script: string): string {
-  const wordCount = script.trim().split(/\s+/).length;
-  const estimatedMinutes = Math.ceil(wordCount / 150);
-  const sceneCount = Math.max(8, Math.min(estimatedMinutes, 50));
+export function getSmartSceneBreakPrompt(chunk: string, chunkIndex: number, totalChunks: number): string {
+  const wordCount = chunk.trim().split(/\s+/).length;
+  const targetScenes = Math.max(3, Math.ceil(wordCount / 150));
 
-  return `You are a film director planning scenes for an anime video.
+  return `You are a film director breaking a script into visual scenes for an anime video.
 
-Read the ENTIRE script below carefully. Then divide it into exactly ${sceneCount} scenes.
+Read this section of a script and divide it into ${targetScenes} scenes based on NATURAL STORY TRANSITIONS.
 
-For each scene, tell me:
-1. The FIRST 8 WORDS of that scene (so I can find where it starts in the script)
-2. A short scene description for the image (in English, 1 sentence)
+Break scenes when:
+- Location changes (moving to a new place)
+- Time passes (next morning, later, after a while)
+- A new important character appears
+- The mood shifts dramatically (happy to sad, calm to action)
+- The action changes (talking → fighting, walking → running)
 
-CRITICAL RULES:
-- Read the FULL script before deciding where to break scenes
-- Break at NATURAL scene transitions — when location changes, new character appears, mood shifts, time passes, or action changes
-- NEVER cut mid-sentence or mid-dialogue
-- Every word of the script must belong to exactly ONE scene — no gaps, no overlaps
-- Scene 1 starts at the very beginning of the script
-- The last scene ends at the very last word of the script
-- The "firstWords" must be EXACTLY as they appear in the script (same language, same words)
+RULES:
+- This is chunk ${chunkIndex}/${totalChunks} of the full script
+- Output exactly the narration text for each scene — copy it EXACTLY from the script, word for word, same language
+- NEVER change, translate, summarize, or skip any word from the script
+- Scene 1 starts at the first word of this chunk
+- The last scene ends at the last word of this chunk
+- Together, all scenes must contain the COMPLETE text of this chunk — nothing missing, nothing added
+- The "imageDescription" must be in ENGLISH regardless of the script language
 
-OUTPUT FORMAT (strict JSON array, no markdown, no code blocks):
+OUTPUT FORMAT (strict JSON, no markdown, no code blocks, no extra text):
 [
-  {"scene":1,"firstWords":"the first eight words here","description":"A cinematic anime scene showing..."},
-  {"scene":2,"firstWords":"next scene starts with these","description":"An intense anime scene where..."}
+  {
+    "narration": "exact text from script in original language for this scene...",
+    "imageDescription": "A short English description of the visual scene for anime image generation"
+  }
 ]
 
-SCRIPT (${wordCount} words, split into ${sceneCount} scenes):
+SCRIPT SECTION (${wordCount} words, break into ~${targetScenes} scenes):
 
-${script}
+${chunk}
 
 Output ONLY the JSON array:`;
 }
 
 /**
- * PASS 2: Image Prompt Generation
- * For a specific scene's narration text, generate a detailed image prompt.
+ * IMAGE PROMPT — generates a detailed anime image prompt for a scene.
+ * Input: ~150 words of narration
+ * Output: ~50 words of image prompt
+ * Cost: TINY
  */
 export function getImagePromptForScene(narration: string, sceneNumber: number, totalScenes: number, characterRef?: string): string {
   const charInstruction = characterRef
     ? `\n\nCHARACTER REFERENCE (use EXACT same appearance):\n${characterRef}`
     : "";
 
-  return `Generate a detailed anime image prompt for scene ${sceneNumber}/${totalScenes} of a video.
+  return `Generate a detailed anime image prompt for scene ${sceneNumber}/${totalScenes}.
 
-NARRATION FOR THIS SCENE:
+NARRATION:
 "${narration}"
 ${charInstruction}
 
-Write ONE detailed image prompt in English that:
+Write ONE image prompt that:
 - Starts with "Anime art style, 16:9 cinematic widescreen illustration."
-- Describes the EXACT scene from the narration above
-- Includes: characters (with consistent appearance), setting, mood, lighting, camera angle
-- Is suitable for AI image generation
+- Describes the EXACT scene from the narration
+- Includes: characters, setting, mood, lighting, camera angle
+- Is in English
 
-RULES:
-- Output ONLY the image prompt text, nothing else
-- No headers, no labels, no quotes around it
-- One single scene, not a comic strip
-- In English regardless of the narration language`;
+Output ONLY the image prompt, nothing else:`;
 }

@@ -1,40 +1,37 @@
 /**
- * CLIENT-SIDE Scene Splitter — NO AI needed, completely FREE.
+ * HYBRID Scene Splitter
  *
- * Splits any script (any language, any length) into scenes by:
- * 1. Breaking into sentences
- * 2. Grouping sentences into scenes of ~150 words (= ~1 minute of video)
- * 3. Always breaks at sentence boundaries — never mid-sentence
- * 4. Works with Hindi (।), English (.), Chinese, Korean, any language
+ * Step 1: Client-side rough split into ~3000 word chunks at sentence boundaries (FREE)
+ * Step 2: AI reads each chunk and identifies natural scene breaks (CHEAP — ~3000 words per call)
  *
- * Cost: $0. Runs instantly in the browser.
+ * This way:
+ * - AI makes SMART scene break decisions (not dumb word-count splitting)
+ * - AI only processes ~3000 words per call (cheap, fast, no token limit issues)
+ * - Scenes stay intact — AI breaks at location changes, time jumps, mood shifts
+ * - Works with ANY script size (22K, 100K, 1M words)
  */
 
 export interface Scene {
   index: number;
   narration: string;
   wordCount: number;
+  imagePrompt?: string;
 }
 
 /**
  * Split text into sentences — supports multiple languages.
  */
-function splitIntoSentences(text: string): string[] {
-  // Split on sentence-ending punctuation:
-  // . ! ? । (Hindi purna viram) 。(Chinese/Japanese period) ！？
-  // But not on abbreviations like Mr. Dr. etc.
+export function splitIntoSentences(text: string): string[] {
   const sentences = text
-    .split(/(?<=[।।.!?。！？])\s+/)
+    .split(/(?<=[।.!?。！？])\s+/)
     .map(s => s.trim())
     .filter(s => s.length > 0);
 
-  // If no sentence breaks found (weird formatting), try newlines
   if (sentences.length <= 1 && text.length > 500) {
     const byNewline = text.split(/\n+/).map(s => s.trim()).filter(s => s.length > 0);
     if (byNewline.length > 1) return byNewline;
   }
 
-  // If still one big block, force-split every ~150 words
   if (sentences.length <= 1 && text.length > 500) {
     const words = text.split(/\s+/);
     const forceSplit: string[] = [];
@@ -48,16 +45,46 @@ function splitIntoSentences(text: string): string[] {
 }
 
 /**
- * Split a script into scenes.
- *
- * @param script - The full script text (any language, any length)
- * @param wordsPerScene - Target words per scene (~150 = 1 minute of video)
- * @returns Array of scenes with narration text
+ * STEP 1: Client-side rough split into chunks of ~3000 words.
+ * Splits at sentence boundaries so no sentence is ever cut.
+ * This is FREE — runs in the browser.
  */
-export function splitIntoScenes(
-  script: string,
-  wordsPerScene: number = 150
-): Scene[] {
+export function roughSplitIntoChunks(script: string, maxWords: number = 3000): string[] {
+  const sentences = splitIntoSentences(script);
+  const totalWords = script.split(/\s+/).length;
+
+  // If small enough, return as single chunk
+  if (totalWords <= maxWords) return [script];
+
+  const chunks: string[] = [];
+  let currentSentences: string[] = [];
+  let currentWords = 0;
+
+  for (const sentence of sentences) {
+    const sentenceWords = sentence.split(/\s+/).length;
+
+    if (currentWords + sentenceWords > maxWords && currentSentences.length > 0) {
+      chunks.push(currentSentences.join(" "));
+      currentSentences = [sentence];
+      currentWords = sentenceWords;
+    } else {
+      currentSentences.push(sentence);
+      currentWords += sentenceWords;
+    }
+  }
+
+  if (currentSentences.length > 0) {
+    chunks.push(currentSentences.join(" "));
+  }
+
+  return chunks;
+}
+
+/**
+ * FALLBACK: Pure client-side scene splitting (if AI fails).
+ * Groups sentences into ~150 word scenes.
+ */
+export function fallbackSplitIntoScenes(script: string, wordsPerScene: number = 150): Scene[] {
   const sentences = splitIntoSentences(script);
   const scenes: Scene[] = [];
   let currentSentences: string[] = [];
@@ -66,9 +93,7 @@ export function splitIntoScenes(
   for (const sentence of sentences) {
     const sentenceWords = sentence.split(/\s+/).length;
 
-    // If adding this sentence exceeds the target AND we already have some content
     if (currentWordCount + sentenceWords > wordsPerScene * 1.3 && currentSentences.length > 0) {
-      // Save current scene
       scenes.push({
         index: scenes.length + 1,
         narration: currentSentences.join(" "),
@@ -82,9 +107,7 @@ export function splitIntoScenes(
     }
   }
 
-  // Don't forget the last scene
   if (currentSentences.length > 0) {
-    // If last scene is too small, merge with previous
     if (scenes.length > 0 && currentWordCount < wordsPerScene * 0.3) {
       const lastScene = scenes[scenes.length - 1];
       lastScene.narration += " " + currentSentences.join(" ");
