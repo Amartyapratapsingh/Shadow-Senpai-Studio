@@ -148,10 +148,11 @@ export default function NovelPage() {
       }
 
       // Check if there's remaining work
+      const needsPanels = saved.panelStatus !== "done" && saved.panelStatus !== "error";
       const needsAudio = saved.audioStatus !== "done" && saved.audioStatus !== "error";
       const needsImages = saved.panels.some(p => p.imageStatus === "pending" || p.imageStatus === "generating");
 
-      if (needsAudio || needsImages) {
+      if (needsPanels || needsAudio || needsImages) {
         // Show paused state with Continue button — don't auto-resume
         setSavedPipelineData(saved);
         setPhase("paused");
@@ -180,67 +181,82 @@ export default function NovelPage() {
     });
   }
 
-  // ── Resume incomplete pipeline ──
+  // ── Resume incomplete pipeline (same step order: Panels → Audio → Images) ──
   const resumePipeline = useCallback(async (saved: SavedPipeline) => {
     if (pipelineRunning.current) return;
     pipelineRunning.current = true;
 
     const voice = getAutoVoice();
 
-    // Resume audio if needed
-    if (saved.audioStatus !== "done" && saved.audioStatus !== "error") {
-      setAudioStatus("running");
-      try {
-        const audioKey = getApiKey(voice.provider === "gemini" ? "gemini" : "openai");
-        if (audioKey) {
-          const res = await fetch("/api/audio", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ script: saved.script, voice: voice.voice, provider: voice.provider, apiKey: audioKey }),
-          });
-          if (res.ok) {
-            const blob = await res.blob();
-            const b64 = await blobToBase64(blob);
-            setAudioUrl(URL.createObjectURL(blob));
-            setAudioStatus("done");
-            addTTSUsage(saved.script.length);
-            saved.audioStatus = "done";
-            saved.audioBase64 = b64;
-            savePipeline(saved);
-          } else { setAudioStatus("error"); saved.audioStatus = "error"; savePipeline(saved); }
-        }
-      } catch { setAudioStatus("error"); saved.audioStatus = "error"; savePipeline(saved); }
+    const splitForResume = (text: string, maxWords: number = 3000): string[] => {
+      const words = text.split(/\s+/);
+      if (words.length <= maxWords) return [text];
+      const chunks: string[] = []; const paras = text.split(/\n\n/).filter(p => p.trim()); let cur = "";
+      for (const p of paras) { const c = cur ? cur + "\n\n" + p : p; if (c.split(/\s+/).length > maxWords && cur.trim()) { chunks.push(cur.trim()); cur = p; } else { cur = c; } }
+      if (cur.trim()) chunks.push(cur.trim());
+      return chunks.length > 0 ? chunks : [text];
+    };
+
+    // ── Step 2: Resume panels if needed ──
+    if (saved.panelStatus !== "done" && saved.panelStatus !== "error") {
+      const config = getScriptConfig();
+      if (config) {
+        setPanelStatus("running");
+        try {
+          const panelChunks = splitForResume(saved.script, 1500);
+          const allPanels: Panel[] = []; let counter = 0;
+          for (const chunk of panelChunks) {
+            const res = await fetch("/api/novel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "split-panels", config, script: chunk }) });
+            if (res.ok) {
+              const data = await res.json();
+              data.panels.forEach((p: { panel: number; narration: string; imagePrompt: string }) => { counter++; allPanels.push({ ...p, panel: counter, imageStatus: "pending" }); });
+              setPanels([...allPanels]);
+            }
+          }
+          saved.panels = allPanels; saved.panelStatus = "done"; setPanelStatus("done"); savePipeline(saved);
+        } catch { setPanelStatus("error"); saved.panelStatus = "error"; savePipeline(saved); }
+      }
     }
 
-    // Resume images if needed
+    // ── Step 3: Resume audio if needed ──
+    if (saved.audioStatus !== "done" && saved.audioStatus !== "error") {
+      const audioKey = getApiKey(voice.provider === "gemini" ? "gemini" : "openai");
+      if (audioKey) {
+        setAudioStatus("running");
+        try {
+          const audioChunks = splitForResume(saved.script, 1500);
+          const blobs: Blob[] = [];
+          for (const chunk of audioChunks) {
+            const res = await fetch("/api/audio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script: chunk, voice: voice.voice, provider: voice.provider, apiKey: audioKey }) });
+            if (res.ok) blobs.push(await res.blob());
+          }
+          if (blobs.length > 0) {
+            const mergedBlob = new Blob(blobs, { type: blobs[0].type || "audio/mpeg" });
+            const b64 = await blobToBase64(mergedBlob);
+            setAudioUrl(URL.createObjectURL(mergedBlob));
+            setAudioStatus("done"); saved.audioStatus = "done"; saved.audioBase64 = b64; savePipeline(saved);
+            addTTSUsage(saved.script.length);
+          } else { setAudioStatus("error"); saved.audioStatus = "error"; savePipeline(saved); }
+        } catch { setAudioStatus("error"); saved.audioStatus = "error"; savePipeline(saved); }
+      }
+    }
+
+    // ── Step 4: Resume images if needed ──
     const pendingPanels = saved.panels.map((p, i) => ({ ...p, idx: i })).filter(p => p.imageStatus === "pending" || p.imageStatus === "generating");
     if (pendingPanels.length > 0) {
-      const imgKey = getImageApiKey();
-      const imgProvider = getImageProvider();
+      const imgKey = getImageApiKey(); const imgProvider = getImageProvider();
       if (imgKey) {
         setImageStatus("running");
         for (const pp of pendingPanels) {
           setPanels(prev => prev.map((p, i) => i === pp.idx ? { ...p, imageStatus: "generating" as const } : p));
           try {
-            const res = await fetch("/api/novel/image", {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ prompt: pp.imagePrompt, provider: imgProvider, apiKey: imgKey }),
-            });
-            if (res.ok) {
-              const data = await res.json();
-              setPanels(prev => { const updated = prev.map((p, i) => i === pp.idx ? { ...p, imageUrl: data.imageUrl, imageStatus: "done" as const } : p); saved.panels = updated; savePipeline(saved); return updated; });
-            } else {
-              const e = await res.json().catch(() => ({}));
-              setPanels(prev => { const updated = prev.map((p, i) => i === pp.idx ? { ...p, imageStatus: "error" as const, imageError: e.error || "Failed" } : p); saved.panels = updated; savePipeline(saved); return updated; });
-            }
-          } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : "Failed";
-            setPanels(prev => { const updated = prev.map((p, i) => i === pp.idx ? { ...p, imageStatus: "error" as const, imageError: msg } : p); saved.panels = updated; savePipeline(saved); return updated; });
-          }
+            const res = await fetch("/api/novel/image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: pp.imagePrompt, provider: imgProvider, apiKey: imgKey }) });
+            if (res.ok) { const data = await res.json(); setPanels(prev => { const u = prev.map((p, i) => i === pp.idx ? { ...p, imageUrl: data.imageUrl, imageStatus: "done" as const } : p); saved.panels = u; savePipeline(saved); return u; }); }
+            else { const e = await res.json().catch(() => ({})); setPanels(prev => { const u = prev.map((p, i) => i === pp.idx ? { ...p, imageStatus: "error" as const, imageError: e.error || "Failed" } : p); saved.panels = u; savePipeline(saved); return u; }); }
+          } catch (err: unknown) { const msg = err instanceof Error ? err.message : "Failed"; setPanels(prev => { const u = prev.map((p, i) => i === pp.idx ? { ...p, imageStatus: "error" as const, imageError: msg } : p); saved.panels = u; savePipeline(saved); return u; }); }
           setImagesGenerated(prev => prev + 1);
         }
-        setImageStatus("done");
-        saved.imageStatus = "done";
-        savePipeline(saved);
+        setImageStatus("done"); saved.imageStatus = "done"; savePipeline(saved);
       }
     }
 
@@ -266,7 +282,6 @@ export default function NovelPage() {
     const voice = getAutoVoice();
     setVoiceInfo(voice);
     let finalScript = "";
-    let audioB64: string | null = null;
 
     // ── 1. SCRIPT ──
     if (hasScript && userScript.trim()) {
@@ -290,47 +305,160 @@ export default function NovelPage() {
     // Save after script
     saveCurrentState(finalScript, "done", "pending", null, "pending", [], "pending", voice);
 
-    // ── 2. AUDIO + PANELS (parallel) ──
-    const audioPromise = (async () => {
-      const audioKey = getApiKey(voice.provider === "gemini" ? "gemini" : "openai");
-      if (!audioKey) { setAudioStatus("error"); return; }
-      setAudioStatus("running");
-      try {
-        const res = await fetch("/api/audio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script: finalScript, voice: voice.voice, provider: voice.provider, apiKey: audioKey }) });
-        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || "Audio failed"); }
-        const blob = await res.blob();
-        audioB64 = await blobToBase64(blob);
-        setAudioUrl(URL.createObjectURL(blob));
-        setAudioStatus("done");
-        addTTSUsage(finalScript.length);
-      } catch { setAudioStatus("error"); }
-    })();
+    // ── Audio chunker (splits by sentences for audio only) ──
+    const splitForAudio = (text: string, maxWords: number = 2000): string[] => {
+      const allWords = text.split(/\s+/);
+      if (allWords.length <= maxWords) return [text];
+      let parts = text.split(/\n\n/).filter(p => p.trim());
+      if (parts.length <= 1) parts = text.split(/\n/).filter(p => p.trim());
+      if (parts.length <= 1) parts = text.split(/(?<=[।.!?])\s+/).filter(p => p.trim());
+      if (parts.length <= 1) { const c: string[] = []; for (let i = 0; i < allWords.length; i += maxWords) c.push(allWords.slice(i, i + maxWords).join(" ")); return c; }
+      const chunks: string[] = []; let cur = "";
+      for (const p of parts) { const c = cur ? cur + "\n\n" + p : p; if (c.split(/\s+/).length > maxWords && cur.trim()) { chunks.push(cur.trim()); cur = p; } else { cur = c; } }
+      if (cur.trim()) chunks.push(cur.trim());
+      return chunks;
+    };
 
+    // ═══════════════════════════════════════════════════
+    //  SMART TWO-PASS PIPELINE — no dumb chunking
+    // ═══════════════════════════════════════════════════
+
+    // ── STEP 2: SCENE PLANNING (AI reads ENTIRE script, outputs scene breaks) ──
     let panelResult: Panel[] | null = null as Panel[] | null;
-    const panelPromise = (async () => {
+    {
       const config = getScriptConfig();
-      if (!config) { setPanelStatus("error"); return; }
-      setPanelStatus("running");
-      try {
-        const res = await fetch("/api/novel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "split-panels", config, script: finalScript }) });
-        if (!res.ok) { const e = await res.json(); throw new Error(e.error || "Panel split failed"); }
-        const data = await res.json();
-        const pd: Panel[] = data.panels.map((p: { panel: number; narration: string; imagePrompt: string }) => ({ ...p, imageStatus: "pending" as const }));
-        setPanels(pd);
-        setPanelStatus("done");
-        addTextUsage(config.model, estimateTokens(finalScript), estimateTokens(JSON.stringify(data.panels)));
-        panelResult = pd;
-      } catch { setPanelStatus("error"); }
-    })();
+      if (!config) { setPanelStatus("error"); setError("No API key for panel splitting"); } else {
+        setPanelStatus("running");
+        try {
+          console.log(`Scene planning: ${finalScript.split(/\s+/).length} words, using ${config.model}`);
 
-    await Promise.all([audioPromise, panelPromise]);
+          // PASS 1: Send ENTIRE script — AI returns scene break points
+          const planRes = await fetch("/api/novel", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "plan-scenes", config, script: finalScript }),
+          });
 
-    // Save after audio + panels
+          if (!planRes.ok) {
+            const e = await planRes.json().catch(() => ({}));
+            throw new Error(e.error || "Scene planning failed");
+          }
+
+          const planData = await planRes.json();
+          const scenes: { scene: number; firstWords: string; description: string }[] = planData.scenes;
+          console.log(`Scene plan: ${scenes.length} scenes identified`);
+
+          // Split script at scene boundaries using firstWords markers
+          const allPanels: Panel[] = [];
+          const scriptLower = finalScript.toLowerCase();
+
+          for (let i = 0; i < scenes.length; i++) {
+            const scene = scenes[i];
+
+            // Find where this scene starts in the script
+            const searchWords = scene.firstWords.toLowerCase().trim();
+            let startIdx = scriptLower.indexOf(searchWords);
+            if (startIdx === -1) {
+              // Try first 5 words if 8 words not found
+              const shorter = searchWords.split(/\s+/).slice(0, 5).join(" ");
+              startIdx = scriptLower.indexOf(shorter);
+            }
+            if (startIdx === -1) startIdx = 0; // Fallback
+
+            // Find where next scene starts
+            let endIdx = finalScript.length;
+            if (i + 1 < scenes.length) {
+              const nextWords = scenes[i + 1].firstWords.toLowerCase().trim();
+              let nextStart = scriptLower.indexOf(nextWords, startIdx + 1);
+              if (nextStart === -1) {
+                const shorter = nextWords.split(/\s+/).slice(0, 5).join(" ");
+                nextStart = scriptLower.indexOf(shorter, startIdx + 1);
+              }
+              if (nextStart > startIdx) endIdx = nextStart;
+            }
+
+            const narration = finalScript.slice(startIdx, endIdx).trim();
+            if (!narration) continue;
+
+            // PASS 2: Generate image prompt for this scene
+            let imagePrompt = `Anime art style, 16:9 cinematic widescreen illustration. ${scene.description}`;
+            try {
+              const promptRes = await fetch("/api/novel", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "image-prompt", config, narration: narration.slice(0, 2000), sceneNumber: i + 1, totalScenes: scenes.length }),
+              });
+              if (promptRes.ok) {
+                const pData = await promptRes.json();
+                if (pData.imagePrompt) imagePrompt = pData.imagePrompt;
+              }
+            } catch { /* use default description */ }
+
+            allPanels.push({
+              panel: i + 1,
+              narration,
+              imagePrompt,
+              imageStatus: "pending" as const,
+            });
+
+            setPanels([...allPanels]);
+            console.log(`Scene ${i + 1}/${scenes.length}: ${narration.split(/\s+/).length} words`);
+          }
+
+          addTextUsage(config.model, estimateTokens(finalScript), estimateTokens(JSON.stringify(scenes)));
+
+          if (allPanels.length > 0) {
+            setPanelStatus("done");
+            panelResult = allPanels;
+          } else {
+            setError(`Scene planning returned 0 panels using ${config.model}`);
+            setPanelStatus("error");
+          }
+        } catch (err: unknown) {
+          setError(`Scene planning error (${config.model}): ${err instanceof Error ? err.message : "Unknown"}`);
+          setPanelStatus("error");
+        }
+      }
+    }
+
+    // Save after panels
+    if (panelResult) {
+      savePipeline({ novelName, style, script: finalScript, scriptStatus: "done", audioStatus: "pending", audioBase64: null, audioMime: "audio/mpeg", panelStatus: "done", panels: panelResult, imageStatus: "pending", voiceInfo: voice });
+    }
+
+    // ── STEP 3: AUDIO (chunked for long scripts) ──
+    let audioB64: string | null = null;
+    {
+      const audioKey = getApiKey(voice.provider === "gemini" ? "gemini" : "openai");
+      if (!audioKey) { setAudioStatus("error"); } else {
+        setAudioStatus("running");
+        try {
+          const audioChunks = splitForAudio(finalScript, 2000);
+          const audioBlobs: Blob[] = [];
+
+          for (let i = 0; i < audioChunks.length; i++) {
+            try {
+              const res = await fetch("/api/audio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script: audioChunks[i], voice: voice.voice, provider: voice.provider, apiKey: audioKey }) });
+              if (res.ok) { audioBlobs.push(await res.blob()); }
+              else { console.error(`Audio chunk ${i+1} failed`); }
+            } catch (chunkErr) { console.error(`Audio chunk ${i+1} error:`, chunkErr); }
+          }
+
+          if (audioBlobs.length > 0) {
+            const mergedBlob = new Blob(audioBlobs, { type: audioBlobs[0]?.type || "audio/mpeg" });
+            audioB64 = await blobToBase64(mergedBlob);
+            setAudioUrl(URL.createObjectURL(mergedBlob));
+            setAudioStatus("done");
+            addTTSUsage(finalScript.length);
+          } else { setAudioStatus("error"); }
+        } catch { setAudioStatus("error"); }
+      }
+    }
+
+    // Save after audio
     if (panelResult) {
       savePipeline({ novelName, style, script: finalScript, scriptStatus: "done", audioStatus: audioB64 ? "done" : "error", audioBase64: audioB64, audioMime: "audio/mpeg", panelStatus: "done", panels: panelResult, imageStatus: "pending", voiceInfo: voice });
     }
 
-    // ── 3. IMAGES ──
+    // ── STEP 4: IMAGES (one by one) ──
     if (panelResult && panelResult.length > 0) {
       const imgKey = getImageApiKey();
       if (!imgKey) { setError("Gemini or OpenAI key needed for images."); pipelineRunning.current = false; return; }
@@ -393,11 +521,12 @@ export default function NovelPage() {
   const totalPanels = panels.length;
   const doneImages = panels.filter(p => p.imageStatus === "done" || p.imageStatus === "error").length;
 
+  // Progress weights: Script=5%, Panels=15%, Audio=20%, Images=60%
   const overallProgress = (() => {
     let pct = 0;
-    if (scriptStatus === "done") pct += 10; else if (scriptStatus === "running") pct += 3;
+    if (scriptStatus === "done") pct += 5; else if (scriptStatus === "running") pct += 2;
+    if (panelStatus === "done") pct += 15; else if (panelStatus === "running") pct += 5;
     if (audioStatus === "done") pct += 20; else if (audioStatus === "running") pct += 8;
-    if (panelStatus === "done") pct += 10; else if (panelStatus === "running") pct += 3;
     if (totalPanels > 0) pct += (doneImages / totalPanels) * 60;
     else if (imageStatus === "done") pct += 60;
     return Math.round(Math.min(pct, 100));
@@ -478,10 +607,14 @@ export default function NovelPage() {
               <div className="flex items-center justify-between mb-2"><h3 className="text-sm font-semibold text-foreground">Overall Progress</h3><span className="text-lg font-bold text-rose-400">{overallProgress}%</span></div>
               <div className="h-3 bg-card-border rounded-full overflow-hidden mb-5"><div className="h-full bg-gradient-to-r from-rose-500 via-fuchsia-500 to-violet-500 rounded-full transition-all duration-700 ease-out" style={{ width: `${overallProgress}%` }} /></div>
               <div className="space-y-3">
-                <div className="flex items-center gap-3"><StatusIcon s={scriptStatus} /><div className="flex-1"><div className="flex items-center justify-between"><span className="text-sm font-medium text-foreground">Script</span><span className="text-xs text-muted">{scriptStatus === "done" ? `${script.split(/\s+/).filter(w=>w).length} words — 100%` : scriptStatus === "running" ? "Writing..." : "Waiting"}</span></div><div className="h-1 mt-1.5 bg-card-border rounded-full overflow-hidden"><div className="h-full bg-rose-500 rounded-full transition-all duration-500" style={{ width: scriptStatus === "done" ? "100%" : scriptStatus === "running" ? "50%" : "0%" }} /></div></div></div>
-                <div className="flex items-center gap-3"><StatusIcon s={audioStatus} /><div className="flex-1"><div className="flex items-center justify-between"><span className="text-sm font-medium text-foreground">Audio</span><span className="text-xs text-muted">{audioStatus === "done" ? `${voiceInfo.presetLabel || voiceInfo.voice} — 100%` : audioStatus === "running" ? `${voiceInfo.presetLabel || voiceInfo.voice}...` : "Waiting"}</span></div><div className="h-1 mt-1.5 bg-card-border rounded-full overflow-hidden"><div className="h-full bg-violet-500 rounded-full transition-all duration-500" style={{ width: audioStatus === "done" ? "100%" : audioStatus === "running" ? "40%" : "0%" }} /></div></div></div>
-                <div className="flex items-center gap-3"><StatusIcon s={panelStatus} /><div className="flex-1"><div className="flex items-center justify-between"><span className="text-sm font-medium text-foreground">Panels</span><span className="text-xs text-muted">{panelStatus === "done" ? `${totalPanels} panels — 100%` : panelStatus === "running" ? "Analyzing..." : "Waiting"}</span></div><div className="h-1 mt-1.5 bg-card-border rounded-full overflow-hidden"><div className="h-full bg-rose-500 rounded-full transition-all duration-500" style={{ width: panelStatus === "done" ? "100%" : panelStatus === "running" ? "30%" : "0%" }} /></div></div></div>
-                <div className="flex items-center gap-3"><StatusIcon s={imageStatus === "done" ? "done" : imageStatus === "running" ? "running" : "pending"} /><div className="flex-1"><div className="flex items-center justify-between"><span className="text-sm font-medium text-foreground">Images (Anime)</span><span className="text-xs text-muted">{totalPanels > 0 && (imageStatus === "running" || imageStatus === "done") ? `${doneImages}/${totalPanels} — ${Math.round((doneImages/totalPanels)*100)}%` : "Waiting"}</span></div><div className="h-1.5 mt-1.5 bg-card-border rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-rose-500 to-red-600 rounded-full transition-all duration-500" style={{ width: totalPanels > 0 ? `${(doneImages/totalPanels)*100}%` : "0%" }} /></div></div></div>
+                {/* Step 1: Script */}
+                <div className="flex items-center gap-3"><StatusIcon s={scriptStatus} /><div className="flex-1"><div className="flex items-center justify-between"><span className="text-sm font-medium text-foreground">Step 1 — Script</span><span className="text-xs text-muted">{scriptStatus === "done" ? `${script.split(/\s+/).filter(w=>w).length} words — 100%` : scriptStatus === "running" ? "Writing..." : "Waiting"}</span></div><div className="h-1 mt-1.5 bg-card-border rounded-full overflow-hidden"><div className="h-full bg-rose-500 rounded-full transition-all duration-500" style={{ width: scriptStatus === "done" ? "100%" : scriptStatus === "running" ? "50%" : "0%" }} /></div></div></div>
+                {/* Step 2: Panels */}
+                <div className="flex items-center gap-3"><StatusIcon s={panelStatus} /><div className="flex-1"><div className="flex items-center justify-between"><span className="text-sm font-medium text-foreground">Step 2 — Panels</span><span className="text-xs text-muted">{panelStatus === "done" ? `${totalPanels} panels — 100%` : panelStatus === "running" ? "Splitting..." : "Waiting"}</span></div><div className="h-1 mt-1.5 bg-card-border rounded-full overflow-hidden"><div className="h-full bg-rose-500 rounded-full transition-all duration-500" style={{ width: panelStatus === "done" ? "100%" : panelStatus === "running" ? "40%" : "0%" }} /></div></div></div>
+                {/* Step 3: Audio */}
+                <div className="flex items-center gap-3"><StatusIcon s={audioStatus} /><div className="flex-1"><div className="flex items-center justify-between"><span className="text-sm font-medium text-foreground">Step 3 — Audio</span><span className="text-xs text-muted">{audioStatus === "done" ? `${voiceInfo.presetLabel || voiceInfo.voice} — 100%` : audioStatus === "running" ? `${voiceInfo.presetLabel || voiceInfo.voice}...` : "Waiting"}</span></div><div className="h-1 mt-1.5 bg-card-border rounded-full overflow-hidden"><div className="h-full bg-violet-500 rounded-full transition-all duration-500" style={{ width: audioStatus === "done" ? "100%" : audioStatus === "running" ? "40%" : "0%" }} /></div></div></div>
+                {/* Step 4: Images */}
+                <div className="flex items-center gap-3"><StatusIcon s={imageStatus === "done" ? "done" : imageStatus === "running" ? "running" : "pending"} /><div className="flex-1"><div className="flex items-center justify-between"><span className="text-sm font-medium text-foreground">Step 4 — Images</span><span className="text-xs text-muted">{totalPanels > 0 && (imageStatus === "running" || imageStatus === "done") ? `${doneImages}/${totalPanels} — ${Math.round((doneImages/totalPanels)*100)}%` : "Waiting"}</span></div><div className="h-1.5 mt-1.5 bg-card-border rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-rose-500 to-red-600 rounded-full transition-all duration-500" style={{ width: totalPanels > 0 ? `${(doneImages/totalPanels)*100}%` : "0%" }} /></div></div></div>
               </div>
             </div>
 

@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+
+// Allow up to 5 minutes for long audio generation
+export const maxDuration = 300;
+
 import {
   AudioProvider,
   TONE_INSTRUCTIONS,

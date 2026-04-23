@@ -44,6 +44,7 @@ const FEATURES = [
   { id: "youtube", label: "YouTube Channel", icon: <Tv className="w-3.5 h-3.5" />, desc: "Analyze your channel" },
   { id: "web", label: "Web Research", icon: <Globe className="w-3.5 h-3.5" />, desc: "Trends & latest" },
   { id: "novels", label: "Manhwa Database", icon: <BookOpen className="w-3.5 h-3.5" />, desc: "Novel recommendations" },
+  { id: "lightnovels", label: "Light Novels", icon: <FileText className="w-3.5 h-3.5" />, desc: "Underrated & hidden gems" },
 ];
 const BUILD_OPTIONS = [
   { id: "full", label: "Full Studio", desc: "Script + Audio + Images", href: "/novel", icon: <Hammer className="w-3.5 h-3.5" /> },
@@ -166,6 +167,15 @@ export default function ResearchPage() {
     if (enabledFeatures.has("youtube")) s += "\n\n[YOUTUBE MODE ACTIVE: Focus on Shadow Senpai's channel, analyze videos, suggest improvements, give SEO tips]";
     if (enabledFeatures.has("web")) s += "\n\n[WEB RESEARCH ACTIVE: Give latest trends, popular series, upcoming releases with specific names]";
     if (enabledFeatures.has("novels")) s += "\n\n[MANHWA DB ACTIVE: 10+ recommendations per request with name, genre, plot, YouTube potential, similar titles]";
+    if (enabledFeatures.has("lightnovels")) s += `\n\n═══ LIGHT NOVEL MODE ACTIVE ═══
+Expert in Japanese light novels, Chinese web novels, Korean web novels. Focus on:
+- Underrated and hidden gem light novels that most people don't know about
+- Completed light novels with good endings
+- Light novels with anime adaptations coming soon
+- Isekai, romance, fantasy, action, psychological light novels
+- Compare light novel vs manga/anime versions
+- Recommend based on: title, author, volumes, status, plot (2 sentences), why it's underrated, YouTube recap potential
+- Know the difference: Light Novel (Japanese LN), Web Novel (WN), Chinese Novel (CN), Korean Novel (KN)`;
     if (ytLinks.length > 0) s += `\n\n═══ YOUTUBE REFERENCE VIDEOS ═══\nThe user wants to make videos LIKE these reference videos. Analyze the style, format, genre, and content type of these videos and use them as inspiration:\n${ytLinks.map((l, i) => `${i + 1}. ${l}`).join("\n")}\nWhen creating scripts or giving advice, match the style and format of these reference videos.`;
     return s;
   };

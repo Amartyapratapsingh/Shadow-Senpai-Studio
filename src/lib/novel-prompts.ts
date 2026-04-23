@@ -1,7 +1,10 @@
 /**
- * Prompts for Novel Video Creation.
- * Supports genres + any language.
- * Panel count is calculated from script length for accuracy.
+ * Novel Video Creation — Two-Pass Smart Scene Splitting
+ *
+ * Pass 1: AI reads ENTIRE script and outputs scene break positions
+ * Pass 2: For each scene, AI generates image prompt
+ *
+ * This ensures NO scene is cut, NO content is lost, NO repetition.
  */
 
 export function getNovelScriptPrompt(
@@ -10,7 +13,7 @@ export function getNovelScriptPrompt(
   genreHint?: string
 ): string {
   const genreInstruction = genreHint
-    ? `\n\nGENRE/STYLE: ${genreHint}\nFollow this genre's conventions, tropes, and emotional beats closely. Make the narration match this genre perfectly.`
+    ? `\n\nGENRE/STYLE: ${genreHint}\nFollow this genre's conventions closely.`
     : "";
 
   return `You are an expert storyteller specializing in manhwa, manhua, and web novel narration for YouTube videos.
@@ -21,76 +24,80 @@ ${genreInstruction}
 RULES:
 - Write ONLY the spoken narration. No headers, labels, brackets, quotes, or formatting.
 - Write in a ${style} style.
-- Write in the SAME language as the novel name. If Hindi, write in Hindi. If English, write in English.
+- Write in the SAME language as the novel name.
 - Cover the story scene by scene with rich visual and emotional detail.
 - The script should be 1500-2500 words.
 - Make it sound natural for a YouTube video narration.
-- DO NOT change the story. Stay faithful to the original plot if it is a known story.
-- DO NOT add your own plot points or change character relationships.
-- If you know this novel/manhwa, narrate it accurately.
+- DO NOT change the story. Stay faithful to the original plot.
 
 Write the full script now:`;
 }
 
-export function getPanelSplitPrompt(script: string): string {
-  // Calculate panel count based on script length
-  // ~150 words = 1 minute of audio = 1 panel image
-  // So each panel covers ~1 minute of narration
-  const wordCount = script.trim().split(/\s+/).filter(w => w.length > 0).length;
+/**
+ * PASS 1: Scene Planning
+ * AI reads the ENTIRE script and outputs scene break positions.
+ * Output is COMPACT — just scene numbers + first few words + description.
+ * The actual narration text is extracted client-side.
+ */
+export function getScenePlanPrompt(script: string): string {
+  const wordCount = script.trim().split(/\s+/).length;
   const estimatedMinutes = Math.ceil(wordCount / 150);
-  const panelCount = Math.max(8, Math.min(estimatedMinutes, 60)); // min 8, max 60 panels
+  const sceneCount = Math.max(8, Math.min(estimatedMinutes, 50));
 
-  // Words per panel
-  const wordsPerPanel = Math.ceil(wordCount / panelCount);
+  return `You are a film director planning scenes for an anime video.
 
-  return `You are a professional anime storyboard artist creating panels for an animated YouTube video.
+Read the ENTIRE script below carefully. Then divide it into exactly ${sceneCount} scenes.
 
-CRITICAL — PANEL COUNT CALCULATION:
-- This script has approximately ${wordCount} words.
-- Estimated video length: ${estimatedMinutes} minutes.
-- You MUST create EXACTLY ${panelCount} panels — one panel for every minute of video.
-- Each panel should cover approximately ${wordsPerPanel} words of the script.
-- DO NOT create fewer panels. DO NOT skip any part of the script.
-- Every single sentence of the script must appear in exactly one panel's narration.
+For each scene, tell me:
+1. The FIRST 8 WORDS of that scene (so I can find where it starts in the script)
+2. A short scene description for the image (in English, 1 sentence)
 
-MULTI-LANGUAGE SUPPORT:
-- The script may be in ANY language (Hindi, English, Chinese, Korean, etc.)
-- "narration" field: keep the EXACT original text in its ORIGINAL language. Do NOT translate.
-- "imagePrompt" field: ALWAYS write in ENGLISH.
+CRITICAL RULES:
+- Read the FULL script before deciding where to break scenes
+- Break at NATURAL scene transitions — when location changes, new character appears, mood shifts, time passes, or action changes
+- NEVER cut mid-sentence or mid-dialogue
+- Every word of the script must belong to exactly ONE scene — no gaps, no overlaps
+- Scene 1 starts at the very beginning of the script
+- The last scene ends at the very last word of the script
+- The "firstWords" must be EXACTLY as they appear in the script (same language, same words)
 
-CHARACTER CONSISTENCY (CRITICAL):
-- Before splitting, identify ALL named characters.
-- Create a fixed visual design for each: exact hair color, hair style, eye color, skin tone, outfit.
-- In panel 1's imagePrompt, describe every character's full appearance.
-- In ALL subsequent panels, use the EXACT SAME appearance description. Never change a character's look.
-
-SPLITTING RULES:
-- Go through the script from START to END, line by line.
-- Divide it into ${panelCount} equal sections.
-- Each panel's narration = the exact text from that section, unchanged.
-- Do NOT rearrange, summarize, or skip any text.
-- The narration of panel 1 + panel 2 + ... + panel ${panelCount} = the COMPLETE original script with nothing missing.
-
-IMAGE PROMPT RULES:
-- Every imagePrompt MUST start with: "Anime art style, Japanese animation quality, 16:9 cinematic widescreen illustration."
-- Describe the EXACT scene happening in that panel's narration.
-- Include: characters (with FIXED design), setting, mood, lighting, action, camera angle.
-- Make each image visually distinct from the others.
-
-OUTPUT FORMAT (strict JSON array, no markdown, no code blocks, no extra text before or after):
+OUTPUT FORMAT (strict JSON array, no markdown, no code blocks):
 [
-  {
-    "panel": 1,
-    "narration": "Exact text from the script in ORIGINAL language...",
-    "imagePrompt": "Anime art style, Japanese animation quality, 16:9 cinematic widescreen illustration. [Scene description in ENGLISH]"
-  }
+  {"scene":1,"firstWords":"the first eight words here","description":"A cinematic anime scene showing..."},
+  {"scene":2,"firstWords":"next scene starts with these","description":"An intense anime scene where..."}
 ]
 
-REMEMBER: You MUST output EXACTLY ${panelCount} panels. Not less. Count them.
-
-Script to split (${wordCount} words, ${panelCount} panels needed):
+SCRIPT (${wordCount} words, split into ${sceneCount} scenes):
 
 ${script}
 
-Output ONLY the JSON array with exactly ${panelCount} panels now:`;
+Output ONLY the JSON array:`;
+}
+
+/**
+ * PASS 2: Image Prompt Generation
+ * For a specific scene's narration text, generate a detailed image prompt.
+ */
+export function getImagePromptForScene(narration: string, sceneNumber: number, totalScenes: number, characterRef?: string): string {
+  const charInstruction = characterRef
+    ? `\n\nCHARACTER REFERENCE (use EXACT same appearance):\n${characterRef}`
+    : "";
+
+  return `Generate a detailed anime image prompt for scene ${sceneNumber}/${totalScenes} of a video.
+
+NARRATION FOR THIS SCENE:
+"${narration}"
+${charInstruction}
+
+Write ONE detailed image prompt in English that:
+- Starts with "Anime art style, 16:9 cinematic widescreen illustration."
+- Describes the EXACT scene from the narration above
+- Includes: characters (with consistent appearance), setting, mood, lighting, camera angle
+- Is suitable for AI image generation
+
+RULES:
+- Output ONLY the image prompt text, nothing else
+- No headers, no labels, no quotes around it
+- One single scene, not a comic strip
+- In English regardless of the narration language`;
 }
