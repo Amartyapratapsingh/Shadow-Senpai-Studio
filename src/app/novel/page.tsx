@@ -7,6 +7,7 @@ import { NOVEL_GENRES, NovelGenre } from "@/lib/novel-genres";
 import { addTextUsage, addTTSUsage, estimateTokens, loadDefaultVoice } from "@/lib/usage";
 import { getApiKey } from "@/lib/api-keys";
 import { AudioProvider } from "@/lib/audio-utils";
+import { splitIntoScenes } from "@/lib/scene-splitter";
 import {
   ArrowLeft, Film, Sparkles, Loader2, AlertCircle, Image as ImageIcon,
   Volume2, FileText, Check, ChevronDown, ChevronUp, Download, Pencil,
@@ -319,103 +320,69 @@ export default function NovelPage() {
       return chunks;
     };
 
-    // ═══════════════════════════════════════════════════
-    //  SMART TWO-PASS PIPELINE — no dumb chunking
-    // ═══════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════
+    //  CLIENT-SIDE SCENE SPLITTING (FREE) + TINY AI IMAGE PROMPTS
+    // ═══════════════════════════════════════════════════════════
 
-    // ── STEP 2: SCENE PLANNING (AI reads ENTIRE script, outputs scene breaks) ──
+    // ── STEP 2: PANELS ──
+    // Scene splitting: done in browser (FREE, instant, any script size)
+    // Image prompts: tiny AI call per scene (~150 words in, ~50 words out)
     let panelResult: Panel[] | null = null as Panel[] | null;
     {
-      const config = getScriptConfig();
-      if (!config) { setPanelStatus("error"); setError("No API key for panel splitting"); } else {
-        setPanelStatus("running");
-        try {
-          console.log(`Scene planning: ${finalScript.split(/\s+/).length} words, using ${config.model}`);
+      setPanelStatus("running");
+      try {
+        // FREE client-side scene splitting — no AI needed
+        const scenes = splitIntoScenes(finalScript, 150); // ~150 words = ~1 minute per scene
+        console.log(`Client-side split: ${scenes.length} scenes from ${finalScript.split(/\s+/).length} words (FREE)`);
 
-          // PASS 1: Send ENTIRE script — AI returns scene break points
-          const planRes = await fetch("/api/novel", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "plan-scenes", config, script: finalScript }),
-          });
+        const allPanels: Panel[] = [];
+        const config = getScriptConfig();
 
-          if (!planRes.ok) {
-            const e = await planRes.json().catch(() => ({}));
-            throw new Error(e.error || "Scene planning failed");
-          }
+        for (let i = 0; i < scenes.length; i++) {
+          const scene = scenes[i];
 
-          const planData = await planRes.json();
-          const scenes: { scene: number; firstWords: string; description: string }[] = planData.scenes;
-          console.log(`Scene plan: ${scenes.length} scenes identified`);
+          // Generate image prompt — small AI call (~150 words input, ~50 words output = CHEAP)
+          let imagePrompt = `Anime art style, 16:9 cinematic widescreen illustration. Scene from a story.`;
 
-          // Split script at scene boundaries using firstWords markers
-          const allPanels: Panel[] = [];
-          const scriptLower = finalScript.toLowerCase();
-
-          for (let i = 0; i < scenes.length; i++) {
-            const scene = scenes[i];
-
-            // Find where this scene starts in the script
-            const searchWords = scene.firstWords.toLowerCase().trim();
-            let startIdx = scriptLower.indexOf(searchWords);
-            if (startIdx === -1) {
-              // Try first 5 words if 8 words not found
-              const shorter = searchWords.split(/\s+/).slice(0, 5).join(" ");
-              startIdx = scriptLower.indexOf(shorter);
-            }
-            if (startIdx === -1) startIdx = 0; // Fallback
-
-            // Find where next scene starts
-            let endIdx = finalScript.length;
-            if (i + 1 < scenes.length) {
-              const nextWords = scenes[i + 1].firstWords.toLowerCase().trim();
-              let nextStart = scriptLower.indexOf(nextWords, startIdx + 1);
-              if (nextStart === -1) {
-                const shorter = nextWords.split(/\s+/).slice(0, 5).join(" ");
-                nextStart = scriptLower.indexOf(shorter, startIdx + 1);
-              }
-              if (nextStart > startIdx) endIdx = nextStart;
-            }
-
-            const narration = finalScript.slice(startIdx, endIdx).trim();
-            if (!narration) continue;
-
-            // PASS 2: Generate image prompt for this scene
-            let imagePrompt = `Anime art style, 16:9 cinematic widescreen illustration. ${scene.description}`;
+          if (config) {
             try {
               const promptRes = await fetch("/api/novel", {
                 method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "image-prompt", config, narration: narration.slice(0, 2000), sceneNumber: i + 1, totalScenes: scenes.length }),
+                body: JSON.stringify({
+                  action: "image-prompt", config,
+                  narration: scene.narration.slice(0, 1000), // only send ~150-200 words
+                  sceneNumber: i + 1, totalScenes: scenes.length,
+                }),
               });
               if (promptRes.ok) {
                 const pData = await promptRes.json();
                 if (pData.imagePrompt) imagePrompt = pData.imagePrompt;
+                addTextUsage(config.model, estimateTokens(scene.narration.slice(0, 1000)), estimateTokens(imagePrompt));
               }
-            } catch { /* use default description */ }
-
-            allPanels.push({
-              panel: i + 1,
-              narration,
-              imagePrompt,
-              imageStatus: "pending" as const,
-            });
-
-            setPanels([...allPanels]);
-            console.log(`Scene ${i + 1}/${scenes.length}: ${narration.split(/\s+/).length} words`);
+            } catch { /* use default prompt */ }
           }
 
-          addTextUsage(config.model, estimateTokens(finalScript), estimateTokens(JSON.stringify(scenes)));
+          allPanels.push({
+            panel: i + 1,
+            narration: scene.narration,
+            imagePrompt,
+            imageStatus: "pending" as const,
+          });
 
-          if (allPanels.length > 0) {
-            setPanelStatus("done");
-            panelResult = allPanels;
-          } else {
-            setError(`Scene planning returned 0 panels using ${config.model}`);
-            setPanelStatus("error");
-          }
-        } catch (err: unknown) {
-          setError(`Scene planning error (${config.model}): ${err instanceof Error ? err.message : "Unknown"}`);
+          // Show panels appearing one by one
+          setPanels([...allPanels]);
+        }
+
+        if (allPanels.length > 0) {
+          setPanelStatus("done");
+          panelResult = allPanels;
+        } else {
+          setError("No scenes could be created from the script.");
           setPanelStatus("error");
         }
+      } catch (err: unknown) {
+        setError(`Scene split error: ${err instanceof Error ? err.message : "Unknown"}`);
+        setPanelStatus("error");
       }
     }
 
