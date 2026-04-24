@@ -753,9 +753,16 @@ export default function NovelPage() {
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-foreground">Step 3 — Audio</span>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted">{audioStatus === "done" ? `${voiceInfo.presetLabel || voiceInfo.voice} — 100%` : audioStatus === "running" ? `${voiceInfo.presetLabel || voiceInfo.voice}...` : audioStatus === "error" ? "Failed" : "Waiting"}</span>
-                        {audioStatus === "error" && !pipelineRunning.current && (
-                          <button onClick={retryAudio} className="text-[10px] px-2 py-0.5 rounded-md bg-violet-500/15 text-violet-400 hover:bg-violet-500/25 transition-all font-medium">Retry Audio</button>
+                        <span className="text-xs text-muted">
+                          {audioStatus === "done" && audioUrl ? `${voiceInfo.presetLabel || voiceInfo.voice} — 100%`
+                            : audioStatus === "done" && !audioUrl ? "Generated but lost — regenerate"
+                            : audioStatus === "running" ? `${voiceInfo.presetLabel || voiceInfo.voice}...`
+                            : audioStatus === "error" ? "Failed" : "Waiting"}
+                        </span>
+                        {(audioStatus === "error" || (audioStatus === "done" && !audioUrl)) && !pipelineRunning.current && (
+                          <button onClick={retryAudio} className="text-[10px] px-2 py-0.5 rounded-md bg-violet-500/15 text-violet-400 hover:bg-violet-500/25 transition-all font-medium">
+                            {audioUrl ? "Retry Audio" : "Generate Audio"}
+                          </button>
                         )}
                       </div>
                     </div>
