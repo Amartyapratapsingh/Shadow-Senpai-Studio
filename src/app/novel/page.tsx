@@ -38,7 +38,7 @@ interface SavedPipeline {
   script: string;
   scriptStatus: StepStatus;
   audioStatus: StepStatus;
-  audioBase64: string | null;
+  audioBase64: string | null; // Not used anymore but kept for type compat
   audioMime: string;
   panelStatus: StepStatus;
   panels: Panel[];
@@ -47,7 +47,35 @@ interface SavedPipeline {
 }
 
 function savePipeline(state: SavedPipeline) {
-  try { localStorage.setItem(PIPELINE_KEY, JSON.stringify(state)); } catch {}
+  try {
+    // Strip heavy data before saving to prevent memory crash
+    const light = {
+      ...state,
+      audioBase64: null, // Never save audio — too large
+      panels: state.panels.map(p => ({
+        ...p,
+        imageUrl: undefined, // Don't save image data URLs — too large (each is 100KB-1MB)
+        // Keep imageStatus so we know which ones need regenerating
+      })),
+    };
+    localStorage.setItem(PIPELINE_KEY, JSON.stringify(light));
+  } catch (e) {
+    // localStorage full — try saving without script text
+    try {
+      const minimal = {
+        ...state,
+        audioBase64: null,
+        script: state.script.slice(0, 5000) + "\n\n[TRUNCATED — full script was too large for storage]",
+        panels: state.panels.map(p => ({
+          panel: p.panel,
+          narration: p.narration.slice(0, 200),
+          imagePrompt: p.imagePrompt,
+          imageStatus: p.imageStatus,
+        })),
+      };
+      localStorage.setItem(PIPELINE_KEY, JSON.stringify(minimal));
+    } catch { /* storage completely full — nothing we can do */ }
+  }
 }
 function loadPipeline(): SavedPipeline | null {
   try {
@@ -85,9 +113,7 @@ function getAutoVoice(): { provider: AudioProvider; voice: string; presetLabel: 
   return { provider: "openai", voice: "cedar", presetLabel: null };
 }
 
-async function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => { const r = new FileReader(); r.onloadend = () => resolve(r.result as string); r.onerror = reject; r.readAsDataURL(blob); });
-}
+// blobToBase64 removed — storing audio/images in localStorage crashes the browser
 
 // ══════════════════════════════════
 export default function NovelPage() {
@@ -138,15 +164,8 @@ export default function NovelPage() {
       setVoiceInfo(saved.voiceInfo);
       setImagesGenerated(saved.panels.filter(p => p.imageStatus === "done" || p.imageStatus === "error").length);
 
-      if (saved.audioBase64) {
-        const parts = saved.audioBase64.split(",");
-        const mime = parts[0].match(/:(.*?);/)?.[1] || "audio/mpeg";
-        const binary = atob(parts[1]);
-        const arr = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
-        const blob = new Blob([arr], { type: mime });
-        setAudioUrl(URL.createObjectURL(blob));
-      }
+      // Audio is NOT stored in localStorage (too large — crashes browser)
+      // User can click "Retry Audio" to regenerate it
 
       // Check if there's remaining work
       const needsPanels = saved.panelStatus !== "done" && saved.panelStatus !== "error";
@@ -232,9 +251,8 @@ export default function NovelPage() {
           }
           if (blobs.length > 0) {
             const mergedBlob = new Blob(blobs, { type: blobs[0].type || "audio/mpeg" });
-            const b64 = await blobToBase64(mergedBlob);
             setAudioUrl(URL.createObjectURL(mergedBlob));
-            setAudioStatus("done"); saved.audioStatus = "done"; saved.audioBase64 = b64; savePipeline(saved);
+            setAudioStatus("done"); saved.audioStatus = "done"; savePipeline(saved);
             addTTSUsage(saved.script.length);
           } else { setAudioStatus("error"); saved.audioStatus = "error"; savePipeline(saved); }
         } catch { setAudioStatus("error"); saved.audioStatus = "error"; savePipeline(saved); }
@@ -428,7 +446,7 @@ export default function NovelPage() {
     }
 
     // ── STEP 3: AUDIO (chunked for long scripts) ──
-    let audioB64: string | null = null;
+    let audioGenerated = false;
     {
       const audioKey = getApiKey(voice.provider === "gemini" ? "gemini" : "openai");
       if (!audioKey) { setAudioStatus("error"); } else {
@@ -447,9 +465,9 @@ export default function NovelPage() {
 
           if (audioBlobs.length > 0) {
             const mergedBlob = new Blob(audioBlobs, { type: audioBlobs[0]?.type || "audio/mpeg" });
-            audioB64 = await blobToBase64(mergedBlob);
             setAudioUrl(URL.createObjectURL(mergedBlob));
             setAudioStatus("done");
+            audioGenerated = true;
             addTTSUsage(finalScript.length);
           } else { setAudioStatus("error"); }
         } catch { setAudioStatus("error"); }
@@ -458,7 +476,7 @@ export default function NovelPage() {
 
     // Save after audio
     if (panelResult) {
-      savePipeline({ novelName, style, script: finalScript, scriptStatus: "done", audioStatus: audioB64 ? "done" : "error", audioBase64: audioB64, audioMime: "audio/mpeg", panelStatus: "done", panels: panelResult, imageStatus: "pending", voiceInfo: voice });
+      savePipeline({ novelName, style, script: finalScript, scriptStatus: "done", audioStatus: audioGenerated ? "done" : "error", audioBase64: null, audioMime: "audio/mpeg", panelStatus: "done", panels: panelResult, imageStatus: "pending", voiceInfo: voice });
     }
 
     // ── STEP 4: IMAGES (one by one) ──
@@ -489,10 +507,10 @@ export default function NovelPage() {
         }
         setImagesGenerated(prev => prev + 1);
         // Save after each image
-        savePipeline({ novelName, style, script: finalScript, scriptStatus: "done", audioStatus: audioB64 ? "done" : "error", audioBase64: audioB64, audioMime: "audio/mpeg", panelStatus: "done", panels: panelResult, imageStatus: "running", voiceInfo: voice });
+        savePipeline({ novelName, style, script: finalScript, scriptStatus: "done", audioStatus: audioGenerated ? "done" : "error", audioBase64: null, audioMime: "audio/mpeg", panelStatus: "done", panels: panelResult, imageStatus: "running", voiceInfo: voice });
       }
       setImageStatus("done");
-      savePipeline({ novelName, style, script: finalScript, scriptStatus: "done", audioStatus: audioB64 ? "done" : "error", audioBase64: audioB64, audioMime: "audio/mpeg", panelStatus: "done", panels: panelResult, imageStatus: "done", voiceInfo: voice });
+      savePipeline({ novelName, style, script: finalScript, scriptStatus: "done", audioStatus: audioGenerated ? "done" : "error", audioBase64: null, audioMime: "audio/mpeg", panelStatus: "done", panels: panelResult, imageStatus: "done", voiceInfo: voice });
     }
 
     setPhase("done");
@@ -531,7 +549,7 @@ export default function NovelPage() {
         addTTSUsage(script.length);
         // Update saved pipeline
         const saved = loadPipeline();
-        if (saved) { saved.audioStatus = "done"; saved.audioBase64 = await blobToBase64(merged); savePipeline(saved); }
+        if (saved) { saved.audioStatus = "done"; savePipeline(saved); }
       } else { setAudioStatus("error"); setError("All audio chunks failed"); }
     } catch { setAudioStatus("error"); }
     pipelineRunning.current = false;
