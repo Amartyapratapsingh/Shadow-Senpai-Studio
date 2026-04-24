@@ -240,7 +240,7 @@ export default function NovelPage() {
       if (audioKey) {
         setAudioStatus("running");
         try {
-          const audioChunks = roughSplitIntoChunks(saved.script, 2000);
+          const audioChunks = roughSplitIntoChunks(saved.script, 1000);
           const blobs: Blob[] = [];
           for (let i = 0; i < audioChunks.length; i++) {
             try {
@@ -452,24 +452,57 @@ export default function NovelPage() {
       if (!audioKey) { setAudioStatus("error"); } else {
         setAudioStatus("running");
         try {
-          const audioChunks = splitForAudio(finalScript, 2000);
+          // Use small chunks (1000 words = ~2 min audio each) to avoid API timeout
+          const audioChunks = splitForAudio(finalScript, 1000);
           const audioBlobs: Blob[] = [];
+          let failedChunks = 0;
+
+          console.log(`Audio: ${audioChunks.length} chunks from ${finalScript.split(/\s+/).length} words`);
 
           for (let i = 0; i < audioChunks.length; i++) {
+            const chunkWords = audioChunks[i].split(/\s+/).length;
+            console.log(`Audio chunk ${i+1}/${audioChunks.length}: ${chunkWords} words`);
             try {
-              const res = await fetch("/api/audio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script: audioChunks[i], voice: voice.voice, provider: voice.provider, apiKey: audioKey }) });
-              if (res.ok) { audioBlobs.push(await res.blob()); }
-              else { console.error(`Audio chunk ${i+1} failed`); }
-            } catch (chunkErr) { console.error(`Audio chunk ${i+1} error:`, chunkErr); }
+              const res = await fetch("/api/audio", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ script: audioChunks[i], voice: voice.voice, provider: voice.provider, apiKey: audioKey }),
+              });
+              if (res.ok) {
+                const blob = await res.blob();
+                if (blob.size > 0) {
+                  audioBlobs.push(blob);
+                  console.log(`Audio chunk ${i+1} OK: ${(blob.size/1024).toFixed(0)}KB`);
+                } else {
+                  failedChunks++;
+                  console.error(`Audio chunk ${i+1}: empty blob`);
+                }
+              } else {
+                failedChunks++;
+                const errData = await res.json().catch(() => ({}));
+                console.error(`Audio chunk ${i+1} failed:`, errData.error || res.statusText);
+              }
+            } catch (chunkErr) {
+              failedChunks++;
+              console.error(`Audio chunk ${i+1} error:`, chunkErr);
+            }
           }
+
+          console.log(`Audio result: ${audioBlobs.length}/${audioChunks.length} succeeded, ${failedChunks} failed`);
 
           if (audioBlobs.length > 0) {
             const mergedBlob = new Blob(audioBlobs, { type: audioBlobs[0]?.type || "audio/mpeg" });
             setAudioUrl(URL.createObjectURL(mergedBlob));
-            setAudioStatus("done");
             audioGenerated = true;
             addTTSUsage(finalScript.length);
-          } else { setAudioStatus("error"); }
+
+            if (failedChunks > 0) {
+              setAudioStatus("done");
+              setError(`Audio: ${audioBlobs.length}/${audioChunks.length} chunks succeeded. ${failedChunks} chunks failed — audio may be incomplete. Try "Retry Audio" to regenerate.`);
+            } else {
+              setAudioStatus("done");
+            }
+          } else { setAudioStatus("error"); setError("All audio chunks failed. Try 'Retry Audio'."); }
         } catch { setAudioStatus("error"); }
       }
     }
@@ -532,25 +565,37 @@ export default function NovelPage() {
     setError("");
     const voice = getAutoVoice();
     const audioKey = getApiKey(voice.provider === "gemini" ? "gemini" : "openai");
-    if (!audioKey) { setAudioStatus("error"); setError("No audio API key"); pipelineRunning.current = false; return; }
+    if (!audioKey) { setAudioStatus("error"); setError("No audio API key. Add OpenAI or Gemini key in Settings."); pipelineRunning.current = false; return; }
     try {
-      const chunks = roughSplitIntoChunks(script, 2000);
+      // Small chunks (1000 words) to avoid timeout
+      const chunks = roughSplitIntoChunks(script, 1000);
       const blobs: Blob[] = [];
+      let failed = 0;
+      console.log(`Retry Audio: ${chunks.length} chunks from ${script.split(/\s+/).length} words`);
+
       for (let i = 0; i < chunks.length; i++) {
+        console.log(`Retry audio chunk ${i+1}/${chunks.length}: ${chunks[i].split(/\s+/).length} words`);
         try {
           const res = await fetch("/api/audio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script: chunks[i], voice: voice.voice, provider: voice.provider, apiKey: audioKey }) });
-          if (res.ok) blobs.push(await res.blob());
-        } catch {}
+          if (res.ok) {
+            const blob = await res.blob();
+            if (blob.size > 0) { blobs.push(blob); console.log(`Retry audio chunk ${i+1} OK: ${(blob.size/1024).toFixed(0)}KB`); }
+            else { failed++; }
+          } else { failed++; const e = await res.json().catch(() => ({})); console.error(`Retry audio chunk ${i+1} failed:`, e.error || ""); }
+        } catch { failed++; }
       }
+
+      console.log(`Retry Audio result: ${blobs.length}/${chunks.length} succeeded`);
+
       if (blobs.length > 0) {
         const merged = new Blob(blobs, { type: blobs[0].type || "audio/mpeg" });
         setAudioUrl(URL.createObjectURL(merged));
         setAudioStatus("done");
         addTTSUsage(script.length);
-        // Update saved pipeline
         const saved = loadPipeline();
         if (saved) { saved.audioStatus = "done"; savePipeline(saved); }
-      } else { setAudioStatus("error"); setError("All audio chunks failed"); }
+        if (failed > 0) setError(`Audio: ${blobs.length}/${chunks.length} chunks OK. ${failed} failed — some audio may be missing.`);
+      } else { setAudioStatus("error"); setError("All audio chunks failed. Check your API key and try again."); }
     } catch { setAudioStatus("error"); }
     pipelineRunning.current = false;
   }, [script]);
