@@ -182,54 +182,53 @@ export default function NovelPage() {
     });
   }
 
-  // ── Resume incomplete pipeline (same step order: Panels → Audio → Images) ──
+  // ── Resume incomplete pipeline (Panels → Audio → Images) ──
   const resumePipeline = useCallback(async (saved: SavedPipeline) => {
     if (pipelineRunning.current) return;
     pipelineRunning.current = true;
 
     const voice = getAutoVoice();
 
-    const splitForResume = (text: string, maxWords: number = 3000): string[] => {
-      const words = text.split(/\s+/);
-      if (words.length <= maxWords) return [text];
-      const chunks: string[] = []; const paras = text.split(/\n\n/).filter(p => p.trim()); let cur = "";
-      for (const p of paras) { const c = cur ? cur + "\n\n" + p : p; if (c.split(/\s+/).length > maxWords && cur.trim()) { chunks.push(cur.trim()); cur = p; } else { cur = c; } }
-      if (cur.trim()) chunks.push(cur.trim());
-      return chunks.length > 0 ? chunks : [text];
-    };
-
-    // ── Step 2: Resume panels if needed ──
+    // ── Step 2: Resume panels if needed (hybrid approach) ──
     if (saved.panelStatus !== "done" && saved.panelStatus !== "error") {
       const config = getScriptConfig();
       if (config) {
         setPanelStatus("running");
         try {
-          const panelChunks = splitForResume(saved.script, 1500);
-          const allPanels: Panel[] = []; let counter = 0;
-          for (const chunk of panelChunks) {
-            const res = await fetch("/api/novel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "split-panels", config, script: chunk }) });
-            if (res.ok) {
-              const data = await res.json();
-              data.panels.forEach((p: { panel: number; narration: string; imagePrompt: string }) => { counter++; allPanels.push({ ...p, panel: counter, imageStatus: "pending" }); });
-              setPanels([...allPanels]);
-            }
+          const chunks = roughSplitIntoChunks(saved.script, 3000);
+          const allPanels: Panel[] = [];
+          for (let c = 0; c < chunks.length; c++) {
+            try {
+              const res = await fetch("/api/novel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "smart-scene-break", config, script: chunks[c], chunkIndex: c+1, totalChunks: chunks.length }) });
+              if (res.ok) {
+                const data = await res.json();
+                if (data.scenes) for (const s of data.scenes) { allPanels.push({ panel: allPanels.length+1, narration: s.narration||"", imagePrompt: `Anime art style, 16:9 cinematic widescreen illustration. ${s.imageDescription||""}`, imageStatus: "pending" }); }
+              } else {
+                const fb = fallbackSplitIntoScenes(chunks[c], 150);
+                for (const f of fb) allPanels.push({ panel: allPanels.length+1, narration: f.narration, imagePrompt: "Anime art style, 16:9 cinematic widescreen illustration.", imageStatus: "pending" });
+              }
+            } catch { const fb = fallbackSplitIntoScenes(chunks[c], 150); for (const f of fb) allPanels.push({ panel: allPanels.length+1, narration: f.narration, imagePrompt: "Anime art style, 16:9 cinematic widescreen illustration.", imageStatus: "pending" }); }
+            setPanels([...allPanels]);
           }
           saved.panels = allPanels; saved.panelStatus = "done"; setPanelStatus("done"); savePipeline(saved);
         } catch { setPanelStatus("error"); saved.panelStatus = "error"; savePipeline(saved); }
       }
     }
 
-    // ── Step 3: Resume audio if needed ──
+    // ── Step 3: Resume audio if needed (sentence-based chunking) ──
     if (saved.audioStatus !== "done" && saved.audioStatus !== "error") {
       const audioKey = getApiKey(voice.provider === "gemini" ? "gemini" : "openai");
       if (audioKey) {
         setAudioStatus("running");
         try {
-          const audioChunks = splitForResume(saved.script, 1500);
+          const audioChunks = roughSplitIntoChunks(saved.script, 2000);
           const blobs: Blob[] = [];
-          for (const chunk of audioChunks) {
-            const res = await fetch("/api/audio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script: chunk, voice: voice.voice, provider: voice.provider, apiKey: audioKey }) });
-            if (res.ok) blobs.push(await res.blob());
+          for (let i = 0; i < audioChunks.length; i++) {
+            try {
+              const res = await fetch("/api/audio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script: audioChunks[i], voice: voice.voice, provider: voice.provider, apiKey: audioKey }) });
+              if (res.ok) blobs.push(await res.blob());
+              else console.error(`Audio resume chunk ${i+1} failed`);
+            } catch { console.error(`Audio resume chunk ${i+1} error`); }
           }
           if (blobs.length > 0) {
             const mergedBlob = new Blob(blobs, { type: blobs[0].type || "audio/mpeg" });
@@ -242,8 +241,8 @@ export default function NovelPage() {
       }
     }
 
-    // ── Step 4: Resume images if needed ──
-    const pendingPanels = saved.panels.map((p, i) => ({ ...p, idx: i })).filter(p => p.imageStatus === "pending" || p.imageStatus === "generating");
+    // ── Step 4: Resume images (only pending/errored ones) ──
+    const pendingPanels = saved.panels.map((p, i) => ({ ...p, idx: i })).filter(p => p.imageStatus === "pending" || p.imageStatus === "generating" || p.imageStatus === "error");
     if (pendingPanels.length > 0) {
       const imgKey = getImageApiKey(); const imgProvider = getImageProvider();
       if (imgKey) {
@@ -252,7 +251,7 @@ export default function NovelPage() {
           setPanels(prev => prev.map((p, i) => i === pp.idx ? { ...p, imageStatus: "generating" as const } : p));
           try {
             const res = await fetch("/api/novel/image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: pp.imagePrompt, provider: imgProvider, apiKey: imgKey }) });
-            if (res.ok) { const data = await res.json(); setPanels(prev => { const u = prev.map((p, i) => i === pp.idx ? { ...p, imageUrl: data.imageUrl, imageStatus: "done" as const } : p); saved.panels = u; savePipeline(saved); return u; }); }
+            if (res.ok) { const data = await res.json(); setPanels(prev => { const u = prev.map((p, i) => i === pp.idx ? { ...p, imageUrl: data.imageUrl, imageStatus: "done" as const, imageError: undefined } : p); saved.panels = u; savePipeline(saved); return u; }); }
             else { const e = await res.json().catch(() => ({})); setPanels(prev => { const u = prev.map((p, i) => i === pp.idx ? { ...p, imageStatus: "error" as const, imageError: e.error || "Failed" } : p); saved.panels = u; savePipeline(saved); return u; }); }
           } catch (err: unknown) { const msg = err instanceof Error ? err.message : "Failed"; setPanels(prev => { const u = prev.map((p, i) => i === pp.idx ? { ...p, imageStatus: "error" as const, imageError: msg } : p); saved.panels = u; savePipeline(saved); return u; }); }
           setImagesGenerated(prev => prev + 1);

@@ -55,7 +55,6 @@ async function generateGeminiImage(apiKey: string, prompt: string): Promise<stri
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           responseModalities: ["TEXT", "IMAGE"],
-          numberOfImages: 1,
         },
       }),
     }
