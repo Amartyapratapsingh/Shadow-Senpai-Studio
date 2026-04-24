@@ -506,6 +506,72 @@ export default function NovelPage() {
     resumePipeline(savedPipelineData);
   }, [savedPipelineData, resumePipeline]);
 
+  // ── Retry ONLY audio ──
+  const retryAudio = useCallback(async () => {
+    if (pipelineRunning.current || !script) return;
+    pipelineRunning.current = true;
+    setAudioStatus("running");
+    setError("");
+    const voice = getAutoVoice();
+    const audioKey = getApiKey(voice.provider === "gemini" ? "gemini" : "openai");
+    if (!audioKey) { setAudioStatus("error"); setError("No audio API key"); pipelineRunning.current = false; return; }
+    try {
+      const chunks = roughSplitIntoChunks(script, 2000);
+      const blobs: Blob[] = [];
+      for (let i = 0; i < chunks.length; i++) {
+        try {
+          const res = await fetch("/api/audio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script: chunks[i], voice: voice.voice, provider: voice.provider, apiKey: audioKey }) });
+          if (res.ok) blobs.push(await res.blob());
+        } catch {}
+      }
+      if (blobs.length > 0) {
+        const merged = new Blob(blobs, { type: blobs[0].type || "audio/mpeg" });
+        setAudioUrl(URL.createObjectURL(merged));
+        setAudioStatus("done");
+        addTTSUsage(script.length);
+        // Update saved pipeline
+        const saved = loadPipeline();
+        if (saved) { saved.audioStatus = "done"; saved.audioBase64 = await blobToBase64(merged); savePipeline(saved); }
+      } else { setAudioStatus("error"); setError("All audio chunks failed"); }
+    } catch { setAudioStatus("error"); }
+    pipelineRunning.current = false;
+  }, [script]);
+
+  // ── Retry ONLY failed/errored images ──
+  const retryImages = useCallback(async () => {
+    if (pipelineRunning.current) return;
+    pipelineRunning.current = true;
+    setError("");
+    const imgKey = getImageApiKey();
+    const imgProvider = getImageProvider();
+    if (!imgKey) { setError("No image API key"); pipelineRunning.current = false; return; }
+
+    const erroredPanels = panels.map((p, i) => ({ ...p, idx: i })).filter(p => p.imageStatus === "error" || p.imageStatus === "pending");
+    if (erroredPanels.length === 0) { pipelineRunning.current = false; return; }
+
+    setImageStatus("running");
+    for (const pp of erroredPanels) {
+      setPanels(prev => prev.map((p, i) => i === pp.idx ? { ...p, imageStatus: "generating" as const, imageError: undefined } : p));
+      try {
+        const res = await fetch("/api/novel/image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: pp.imagePrompt, provider: imgProvider, apiKey: imgKey }) });
+        if (res.ok) {
+          const data = await res.json();
+          setPanels(prev => { const u = prev.map((p, i) => i === pp.idx ? { ...p, imageUrl: data.imageUrl, imageStatus: "done" as const, imageError: undefined } : p); const saved = loadPipeline(); if (saved) { saved.panels = u; savePipeline(saved); } return u; });
+        } else {
+          const e = await res.json().catch(() => ({}));
+          setPanels(prev => prev.map((p, i) => i === pp.idx ? { ...p, imageStatus: "error" as const, imageError: e.error || "Failed" } : p));
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Failed";
+        setPanels(prev => prev.map((p, i) => i === pp.idx ? { ...p, imageStatus: "error" as const, imageError: msg } : p));
+      }
+    }
+    setImageStatus("done");
+    const saved = loadPipeline();
+    if (saved) { saved.imageStatus = "done"; saved.panels = panels; savePipeline(saved); }
+    pipelineRunning.current = false;
+  }, [panels]);
+
   // ── New project ──
   const handleNewProject = () => { clearPipeline(); setPhase("input"); setScript(""); setPanels([]); setAudioUrl(null); setScriptStatus("pending"); setAudioStatus("pending"); setPanelStatus("pending"); setImageStatus("pending"); setError(""); setImagesGenerated(0); };
 
@@ -522,7 +588,9 @@ export default function NovelPage() {
   const anyKey = hasKeys.openai || hasKeys.anthropic || hasKeys.gemini;
   const canStart = anyKey && ((hasScript && userScript.trim().length > 0) || (!hasScript && novelName.trim().length > 0));
   const totalPanels = panels.length;
-  const doneImages = panels.filter(p => p.imageStatus === "done" || p.imageStatus === "error").length;
+  const successImages = panels.filter(p => p.imageStatus === "done").length;
+  const erroredImages = panels.filter(p => p.imageStatus === "error").length;
+  const doneImages = successImages + erroredImages;
 
   // Progress weights: Script=5%, Panels=15%, Audio=20%, Images=60%
   const overallProgress = (() => {
@@ -615,9 +683,39 @@ export default function NovelPage() {
                 {/* Step 2: Panels */}
                 <div className="flex items-center gap-3"><StatusIcon s={panelStatus} /><div className="flex-1"><div className="flex items-center justify-between"><span className="text-sm font-medium text-foreground">Step 2 — Panels</span><span className="text-xs text-muted">{panelStatus === "done" ? `${totalPanels} panels — 100%` : panelStatus === "running" ? "Splitting..." : "Waiting"}</span></div><div className="h-1 mt-1.5 bg-card-border rounded-full overflow-hidden"><div className="h-full bg-rose-500 rounded-full transition-all duration-500" style={{ width: panelStatus === "done" ? "100%" : panelStatus === "running" ? "40%" : "0%" }} /></div></div></div>
                 {/* Step 3: Audio */}
-                <div className="flex items-center gap-3"><StatusIcon s={audioStatus} /><div className="flex-1"><div className="flex items-center justify-between"><span className="text-sm font-medium text-foreground">Step 3 — Audio</span><span className="text-xs text-muted">{audioStatus === "done" ? `${voiceInfo.presetLabel || voiceInfo.voice} — 100%` : audioStatus === "running" ? `${voiceInfo.presetLabel || voiceInfo.voice}...` : "Waiting"}</span></div><div className="h-1 mt-1.5 bg-card-border rounded-full overflow-hidden"><div className="h-full bg-violet-500 rounded-full transition-all duration-500" style={{ width: audioStatus === "done" ? "100%" : audioStatus === "running" ? "40%" : "0%" }} /></div></div></div>
+                <div className="flex items-center gap-3">
+                  <StatusIcon s={audioStatus} />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-foreground">Step 3 — Audio</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted">{audioStatus === "done" ? `${voiceInfo.presetLabel || voiceInfo.voice} — 100%` : audioStatus === "running" ? `${voiceInfo.presetLabel || voiceInfo.voice}...` : audioStatus === "error" ? "Failed" : "Waiting"}</span>
+                        {audioStatus === "error" && !pipelineRunning.current && (
+                          <button onClick={retryAudio} className="text-[10px] px-2 py-0.5 rounded-md bg-violet-500/15 text-violet-400 hover:bg-violet-500/25 transition-all font-medium">Retry Audio</button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="h-1 mt-1.5 bg-card-border rounded-full overflow-hidden"><div className="h-full bg-violet-500 rounded-full transition-all duration-500" style={{ width: audioStatus === "done" ? "100%" : audioStatus === "running" ? "40%" : "0%" }} /></div>
+                  </div>
+                </div>
                 {/* Step 4: Images */}
-                <div className="flex items-center gap-3"><StatusIcon s={imageStatus === "done" ? "done" : imageStatus === "running" ? "running" : "pending"} /><div className="flex-1"><div className="flex items-center justify-between"><span className="text-sm font-medium text-foreground">Step 4 — Images</span><span className="text-xs text-muted">{totalPanels > 0 && (imageStatus === "running" || imageStatus === "done") ? `${doneImages}/${totalPanels} — ${Math.round((doneImages/totalPanels)*100)}%` : "Waiting"}</span></div><div className="h-1.5 mt-1.5 bg-card-border rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-rose-500 to-red-600 rounded-full transition-all duration-500" style={{ width: totalPanels > 0 ? `${(doneImages/totalPanels)*100}%` : "0%" }} /></div></div></div>
+                <div className="flex items-center gap-3">
+                  <StatusIcon s={erroredImages > 0 ? "error" : imageStatus === "done" ? "done" : imageStatus === "running" ? "running" : "pending"} />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-foreground">Step 4 — Images</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted">
+                          {totalPanels > 0 ? `${successImages}/${totalPanels}${erroredImages > 0 ? ` (${erroredImages} failed)` : ""} — ${Math.round((successImages/totalPanels)*100)}%` : "Waiting"}
+                        </span>
+                        {erroredImages > 0 && !pipelineRunning.current && (
+                          <button onClick={retryImages} className="text-[10px] px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-400 hover:bg-rose-500/25 transition-all font-medium">Retry {erroredImages} Failed</button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="h-1.5 mt-1.5 bg-card-border rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-rose-500 to-red-600 rounded-full transition-all duration-500" style={{ width: totalPanels > 0 ? `${(successImages/totalPanels)*100}%` : "0%" }} /></div>
+                  </div>
+                </div>
               </div>
             </div>
 
