@@ -16,19 +16,28 @@ export function getNovelScriptPrompt(
     ? `\n\nGENRE/STYLE: ${genreHint}\nFollow this genre's conventions closely.`
     : "";
 
-  return `You are an expert storyteller specializing in manhwa, manhua, and web novel narration for YouTube videos.
-
-Write a vivid, cinematic narration script for: "${novelName}"
+  return `You are an expert manhwa/manhua/web novel YouTube narrator. Write a dramatic, cinematic narration script for: "${novelName}"
 ${genreInstruction}
 
+NARRATION STYLE (follow this exactly):
+- Write like you're narrating a MOVIE — scene by scene, moment by moment
+- SHORT, PUNCHY sentences for action: "I lunged forward." "My fist connected." "She crashed to the floor."
+- LONGER, flowing sentences for emotional moments
+- Include character dialogue naturally woven into narration — not with quote labels
+- Build TENSION: slow before reveals, fast during fights
+- Vivid physical descriptions: "His face went pale." "Her knuckles turned white."
+- Show reactions: "She took an involuntary step back." "His fists clenched."
+- Dramatic transitions: "That's when everything changed." "But I wasn't done."
+- Make the viewer FEEL the character's emotions — anger, revenge, satisfaction
+- Write in ${style} style
+- Write in the SAME language as the novel name
+
 RULES:
-- Write ONLY the spoken narration. No headers, labels, brackets, quotes, or formatting.
-- Write in a ${style} style.
-- Write in the SAME language as the novel name.
-- Cover the story scene by scene.
-- The script should be 1500-2500 words.
-- Make it sound natural for a YouTube video narration.
-- Stay faithful to the original plot.
+- Write ONLY the spoken narration. No headers, labels, brackets, or formatting.
+- 1500-2500 words.
+- Stay faithful to the original plot if known.
+- NO markdown, NO stage directions, NO brackets.
+- Pure spoken text ready for AI voice generation.
 
 Write the full script now:`;
 }

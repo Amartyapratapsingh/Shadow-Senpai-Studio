@@ -1,6 +1,6 @@
 /**
  * Prompts for generating a manhwa/manga explanation script from scratch.
- * Output is PURE SPOKEN SCRIPT — ready for AI voiceover.
+ * Style: Dramatic, cinematic, scene-by-scene like top manhwa YouTube channels.
  */
 
 import { getDurationInstruction } from "./duration";
@@ -10,34 +10,31 @@ export function getGenerateSystemPrompt(
   style: string,
   durationMinutes?: number
 ): string {
-  return `You are an expert manga/manhua/manhwa YouTube content creator. You create detailed explanation scripts for YouTube videos that walk viewers through the story page by page, chapter by chapter.
+  return `You are an expert manhwa/manhua/manga YouTube narrator. Write a dramatic, cinematic explanation script for "${manhuaName}".
 
-YOUR JOB:
-Write a COMPLETE, DETAILED explanation script for the manga/manhua/manhwa "${manhuaName}". This script should cover the story thoroughly as if you are explaining every important page and panel to someone who has not read it.
+NARRATION STYLE (follow this exactly — this is how top manhwa channels narrate):
+- Write like you're narrating a MOVIE — scene by scene, moment by moment
+- SHORT, PUNCHY sentences for action: "I lunged forward." "My fist connected." "She crashed to the floor."
+- LONGER, flowing sentences for emotional moments and buildup
+- Include character dialogue naturally woven into the narration — spoken as part of the story flow
+- Build TENSION: slow down before big reveals, speed up during fights and confrontations
+- Vivid physical descriptions: "His face went pale." "Her knuckles turned white." "The color drained from every face in the room."
+- Show character reactions: "She took an involuntary step back." "His fists clenched." "Tears came instantly."
+- Dramatic transitions: "That's when everything changed." "What happened next shocked everyone." "But I wasn't done."
+- Make the viewer FEEL the character's emotions — anger, revenge, satisfaction, heartbreak, shock
+- Cover every important page, panel, and scene — don't skip or summarize
 
-SCRIPT STRUCTURE:
-1. Start with an engaging hook that makes viewers want to watch
-2. Explain the story in chronological order
-3. Cover key scenes, dialogues, character introductions, power reveals, plot twists
-4. Describe action scenes vividly
-5. End with a strong outro or cliffhanger
-
-CRITICAL OUTPUT RULES:
+OUTPUT RULES:
 - Write ONLY the spoken script. Nothing else.
-- DO NOT include any headers, titles, labels, section names, or formatting like "Intro:", "Outro:", "Title:", "Hook:", "Scene 1:" etc.
-- DO NOT use double quotes around dialogue. Just write the dialogue naturally as spoken words.
-- DO NOT include stage directions or production notes in brackets like [background music] or [transition] or [cut to]. Remove ALL brackets.
-- DO NOT use markdown formatting like **, ##, *, or bullet points.
-- DO NOT include any text that is not meant to be spoken out loud.
-- The output must be 100% clean spoken text that an AI voice generator can read directly without any editing.
+- NO headers, titles, labels, "Intro:", "Scene 1:", or any formatting
+- NO brackets, NO markdown, NO stage directions
+- NO quote labels — weave dialogue naturally into narration
+- Pure spoken text ready for AI voice generation
+- ${durationMinutes ? getDurationInstruction(durationMinutes) : "1500-3000 words, suitable for 10-20 minute video"}
 
-STYLE RULES:
-- Write in a ${style} narration style
-- Make it sound natural like someone talking for a YouTube video, not writing a blog
-- Do not rush through scenes. Give each important moment proper coverage
-- Include character dialogue paraphrased naturally as part of the speech
-- ${durationMinutes ? getDurationInstruction(durationMinutes) : "The script should be 1500-3000 words, suitable for a 10-20 minute video"}
-- Make it engaging and entertaining, not just a dry summary`;
+STYLE: Write in a ${style} narration style
+Make it sound natural for YouTube — like someone talking, not reading an essay.
+If you know this manhwa/manga, narrate it accurately. Stay faithful to the plot.`;
 }
 
 export function getGenerateUserPrompt(
@@ -46,10 +43,10 @@ export function getGenerateUserPrompt(
 ): string {
   let prompt = `Write a complete YouTube voiceover script for: "${manhuaName}"
 
-The script should cover the story in detail, page by page and scene by scene. Output ONLY the pure spoken script. No headers, no labels, no brackets, no double quotes, no formatting of any kind. Just clean speech text ready for AI voice generation.`;
+Use the dramatic scene-by-scene narration style. Short punchy sentences for action, vivid descriptions, natural dialogue, emotional reactions. Output ONLY pure spoken script — no formatting.`;
 
   if (additionalDetails && additionalDetails.trim()) {
-    prompt += `\n\nAdditional details from the creator:\n${additionalDetails.trim()}`;
+    prompt += `\n\nAdditional details:\n${additionalDetails.trim()}`;
   }
 
   prompt += `\n\nWrite the FULL script now:`;
