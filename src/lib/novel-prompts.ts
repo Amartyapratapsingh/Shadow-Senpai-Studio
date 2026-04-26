@@ -30,7 +30,7 @@ For each character, provide:
 - Outfit: default clothing (e.g., "white button-up shirt with rolled sleeves, black pants")
 - Distinguishing features: scars, accessories, etc.
 
-ART STYLE REFERENCE: Modern Japanese anime like Classroom of the Elite, Solo Leveling, Horimiya — soft cel-shading, detailed realistic proportions, large but not exaggerated eyes, natural hair colors, clean modern clothing.
+ART STYLE REFERENCE: Anime TV episode frame — FLAT cel-shading (2-3 tones only, hard shadow edges), visible black outlines on everything, chunky hair strands (not individual), flat color skin, simple anime eyes with highlight dot. Like A-1 Pictures / CloverWorks / MAPPA studio quality. NOT digital painting, NOT concept art.
 
 OUTPUT FORMAT (strict JSON, no markdown):
 [
@@ -115,9 +115,9 @@ NARRATION RULES:
 
 IMAGE DESCRIPTION RULES:
 - MUST be in ENGLISH regardless of narration language
-- Start with: "Japanese anime 2D illustration, manga art style, cel-shaded coloring, clean lineart."
+- Start with: "Anime TV episode frame, flat cel-shading, visible black outlines, 16:9."
 - Describe the EXACT MOMENT from this panel's narration ONLY
-- Anime characters: large expressive eyes, stylized hair, dynamic poses
+- Anime characters: flat color skin, chunky hair strands, simple clean eyes with highlight dot
 - Include: setting, lighting, mood, camera angle
 - Be VERY specific about what characters are DOING and their EXPRESSIONS
 
@@ -125,7 +125,7 @@ OUTPUT FORMAT (strict JSON, no markdown, no code blocks):
 [
   {
     "narration": "exact text from script...",
-    "imageDescription": "Japanese anime 2D illustration, manga art style, cel-shaded coloring, clean lineart. [EXACT moment from THIS narration only — specific character actions, expressions, setting, lighting]"
+    "imageDescription": "Anime TV episode frame, flat cel-shading, visible black outlines, 16:9. [EXACT moment from THIS narration only — specific character actions, expressions, setting, lighting]"
   }
 ]
 
@@ -151,12 +151,12 @@ NARRATION (panel ${sceneNumber}/${totalScenes}):
 "${narration}"
 ${charInstruction}
 
-ART STYLE (MANDATORY): Modern Japanese anime — like Classroom of the Elite, Solo Leveling, Horimiya quality. Soft cel-shading, detailed realistic proportions, natural hair colors, clean modern look. NOT old-school manga. NOT chibi. NOT cartoonish.
+ART STYLE (MANDATORY): Anime TV episode frame — FLAT cel-shading (2-3 tones, hard shadow edges), visible black outlines, chunky hair strands, flat color fills for skin and clothes, simple anime eyes. Like a screenshot from Crunchyroll. NOT digital painting, NOT concept art, NOT 3D render.
 
 IMAGE MUST SHOW: The EXACT moment from this narration. Pick the most dramatic visual moment.
 
 Write the prompt following this structure:
-1. "Modern Japanese anime illustration, soft cel-shading, detailed realistic proportions, 16:9 cinematic widescreen."
+1. "Anime TV episode frame, flat cel-shading, visible black outlines, 16:9 widescreen."
 2. The SPECIFIC action/moment happening
 3. Characters EXACTLY as described in the character designs above (copy their description word-for-word)
 4. Expressions and poses matching the emotion of the scene

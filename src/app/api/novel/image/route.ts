@@ -2,30 +2,39 @@ import { NextRequest, NextResponse } from "next/server";
 
 type ImageProvider = "openai" | "gemini";
 
+/**
+ * Build image prompt that produces REAL anime TV episode frames.
+ * NOT digital painting. NOT concept art. A literal frame from an anime show.
+ * This prompt is used for BOTH OpenAI and Gemini — same quality for both.
+ */
 function buildImagePrompt(rawPrompt: string): string {
-  // Remove any existing style prefix to avoid duplication
-  let clean = rawPrompt.replace(/^(Japanese anime|Anime art style|manga art)[^.]*\.\s*/i, "").trim();
+  let clean = rawPrompt.replace(/^(Japanese anime|Anime art style|manga art|Modern Japanese)[^.]*\.\s*/i, "").trim();
 
-  return `Modern Japanese anime illustration in LANDSCAPE 16:9 widescreen format.
+  return `A frame from a Japanese anime TV episode. 16:9 widescreen. This must look EXACTLY like a screenshot taken from a real anime show airing on TV.
 
-ART STYLE (MANDATORY):
-- Modern Japanese anime style — like Classroom of the Elite, Solo Leveling, Horimiya, My Dress-Up Darling
-- Soft cel-shading with detailed proportions — NOT old-school, NOT exaggerated
-- Realistic anime proportions: detailed expressive eyes (not overly large), natural hair colors, proper body proportions
-- Clean modern character designs with detailed clothing folds and textures
-- Soft ambient lighting with subtle highlights and shadows
-- Background art: detailed, realistic environments with anime aesthetic
-- NOT chibi, NOT cartoonish, NOT 3D render — MODERN 2D ANIME
+SCENE: ${clean}
 
-SCENE TO DRAW:
-${clean}
+ANIME TV FRAME STYLE (follow these EXACTLY — this is the most important part):
+- FLAT cel-shading with only 2-3 shadow tones per surface. NO smooth gradients. Hard shadow edges.
+- VISIBLE black outlines on ALL edges — characters, clothes, hair, objects. Clean consistent lineart thickness.
+- FLAT color fills for skin (one base color + one shadow color, nothing more)
+- Hair drawn as CHUNKY STRANDS with flat color, not individual realistic strands
+- Eyes: clean anime eyes with flat iris color, white highlight dot, simple eyelashes. NOT hyper-detailed.
+- Clothing: flat colors with simple fold lines, not rendered fabric textures
+- Background: softer/slightly blurred compared to characters, simple painted style
+- Lighting: simple directional light creating hard cel-shaded shadows, NOT volumetric or atmospheric
+- Overall: CLEAN, SIMPLE, FLAT — like anime studios A-1 Pictures, CloverWorks, MAPPA produce
 
-COMPOSITION:
-- ONE single landscape scene (16:9 ratio, wider than tall)
-- Cinematic camera angle — like a key frame from an anime episode
-- NOT a comic strip, NOT multiple panels, NOT split screen
-- NO text, NO subtitles, NO captions, NO watermarks anywhere on the image
-- Fill the entire canvas with the illustration`;
+WHAT TO AVOID (CRITICAL):
+- NO smooth gradient shading (use FLAT cel-shading only)
+- NO realistic skin rendering or subsurface scattering
+- NO individual hair strands (use chunky anime hair blocks)
+- NO hyper-detailed eyes with realistic iris patterns
+- NO over-detailed backgrounds competing with characters
+- NO digital painting look, NO concept art look, NO 3D render look
+- NO text, subtitles, captions, or watermarks
+
+This should look like someone pressed pause on Crunchyroll and took a screenshot. ONE scene, ONE frame, LANDSCAPE 16:9.`;
 }
 
 // ── OpenAI ──
@@ -78,7 +87,7 @@ async function generateGeminiImage(apiKey: string, prompt: string, model: string
   throw new Error("No image returned from Gemini");
 }
 
-// ── Main ──
+// ── Main — same prompt goes to BOTH OpenAI and Gemini ──
 export async function POST(request: NextRequest) {
   try {
     const { prompt, provider, apiKey, model } = await request.json();
@@ -87,6 +96,8 @@ export async function POST(request: NextRequest) {
 
     const imgProvider = (provider || "openai") as ImageProvider;
     const imgModel = model || (imgProvider === "gemini" ? "gemini-2.5-flash-image" : "gpt-image-1.5");
+
+    // SAME prompt for both providers — consistent quality
     const fullPrompt = buildImagePrompt(prompt);
 
     const imageUrl = imgProvider === "gemini"
