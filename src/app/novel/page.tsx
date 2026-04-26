@@ -23,6 +23,8 @@ interface Panel {
   imageUrl?: string;
   imageStatus: "pending" | "generating" | "done" | "error";
   imageError?: string;
+  audioUrl?: string;
+  audioStatus: "pending" | "generating" | "done" | "error";
 }
 
 interface VoicePreset { label: string; provider: AudioProvider; voice: string; }
@@ -278,12 +280,12 @@ export default function NovelPage() {
               const res = await fetch("/api/novel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "smart-scene-break", config, script: chunks[c], chunkIndex: c+1, totalChunks: chunks.length }) });
               if (res.ok) {
                 const data = await res.json();
-                if (data.scenes) for (const s of data.scenes) { allPanels.push({ panel: allPanels.length+1, narration: s.narration||"", imagePrompt: `Anime art style, 16:9 cinematic widescreen illustration. ${s.imageDescription||""}`, imageStatus: "pending" }); }
+                if (data.scenes) for (const s of data.scenes) { allPanels.push({ panel: allPanels.length+1, narration: s.narration||"", imagePrompt: `Anime art style, 16:9 cinematic widescreen illustration. ${s.imageDescription||""}`, imageStatus: "pending", audioStatus: "pending" }); }
               } else {
                 const fb = fallbackSplitIntoScenes(chunks[c], 150);
-                for (const f of fb) allPanels.push({ panel: allPanels.length+1, narration: f.narration, imagePrompt: "Anime art style, 16:9 cinematic widescreen illustration.", imageStatus: "pending" });
+                for (const f of fb) allPanels.push({ panel: allPanels.length+1, narration: f.narration, imagePrompt: "Anime art style, 16:9 cinematic widescreen illustration.", imageStatus: "pending", audioStatus: "pending" });
               }
-            } catch { const fb = fallbackSplitIntoScenes(chunks[c], 150); for (const f of fb) allPanels.push({ panel: allPanels.length+1, narration: f.narration, imagePrompt: "Anime art style, 16:9 cinematic widescreen illustration.", imageStatus: "pending" }); }
+            } catch { const fb = fallbackSplitIntoScenes(chunks[c], 150); for (const f of fb) allPanels.push({ panel: allPanels.length+1, narration: f.narration, imagePrompt: "Anime art style, 16:9 cinematic widescreen illustration.", imageStatus: "pending", audioStatus: "pending" }); }
             setPanels([...allPanels]);
           }
           saved.panels = allPanels; saved.panelStatus = "done"; setPanelStatus("done"); savePipeline(saved);
@@ -435,7 +437,7 @@ export default function NovelPage() {
                       panel: allPanels.length + 1,
                       narration: scene.narration || "",
                       imagePrompt: `Anime art style, 16:9 cinematic widescreen illustration. ${scene.imageDescription || "Scene from the story."}`,
-                      imageStatus: "pending" as const,
+                      imageStatus: "pending" as const, audioStatus: "pending" as const,
                     });
                   }
                   setPanels([...allPanels]);
@@ -450,7 +452,7 @@ export default function NovelPage() {
                     panel: allPanels.length + 1,
                     narration: fs.narration,
                     imagePrompt: `Anime art style, 16:9 cinematic widescreen illustration. A scene from the story.`,
-                    imageStatus: "pending" as const,
+                    imageStatus: "pending" as const, audioStatus: "pending" as const,
                   });
                 }
                 setPanels([...allPanels]);
@@ -463,7 +465,7 @@ export default function NovelPage() {
                   panel: allPanels.length + 1,
                   narration: fs.narration,
                   imagePrompt: `Anime art style, 16:9 cinematic widescreen illustration. A scene from the story.`,
-                  imageStatus: "pending" as const,
+                  imageStatus: "pending" as const, audioStatus: "pending" as const,
                 });
               }
               setPanels([...allPanels]);
@@ -478,7 +480,7 @@ export default function NovelPage() {
               panel: allPanels.length + 1,
               narration: fs.narration,
               imagePrompt: `Anime art style, 16:9 cinematic widescreen illustration. A scene from the story.`,
-              imageStatus: "pending" as const,
+              imageStatus: "pending" as const, audioStatus: "pending" as const,
             });
           }
           setPanels([...allPanels]);
@@ -502,90 +504,98 @@ export default function NovelPage() {
       savePipeline({ novelName, style, script: finalScript, scriptStatus: "done", audioStatus: "pending", audioBase64: null, audioMime: "audio/mpeg", panelStatus: "done", panels: panelResult, imageStatus: "pending", voiceInfo: voice });
     }
 
-    // ── STEP 3: AUDIO (chunked for long scripts) ──
-    let audioGenerated = false;
-    {
-      const audioKey = getApiKey(voice.provider === "gemini" ? "gemini" : "openai");
-      if (!audioKey) { setAudioStatus("error"); } else {
-        setAudioStatus("running");
-        try {
-          const audioChunks = splitForAudio(finalScript, 1000);
-          audioChunksRef.current = audioChunks;
-          audioBlobsRef.current = new Array(audioChunks.length).fill(null);
-          let failedCount = 0;
-
-          console.log(`Audio: ${audioChunks.length} chunks from ${finalScript.split(/\s+/).length} words`);
-
-          for (let i = 0; i < audioChunks.length; i++) {
-            console.log(`Audio chunk ${i+1}/${audioChunks.length}: ${audioChunks[i].split(/\s+/).length} words`);
-            try {
-              const res = await fetch("/api/audio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script: audioChunks[i], voice: voice.voice, provider: voice.provider, apiKey: audioKey }) });
-              if (res.ok) {
-                const blob = await res.blob();
-                if (blob.size > 0) { audioBlobsRef.current[i] = blob; console.log(`Audio chunk ${i+1} OK: ${(blob.size/1024).toFixed(0)}KB`); }
-                else { failedCount++; }
-              } else { failedCount++; }
-            } catch { failedCount++; }
-
-            // Merge whatever we have so far and update player
-            const currentBlobs = audioBlobsRef.current.filter((b): b is Blob => b !== null);
-            if (currentBlobs.length > 0) {
-              const merged = new Blob(currentBlobs, { type: currentBlobs[0].type || "audio/mpeg" });
-              setAudioUrl(URL.createObjectURL(merged));
-            }
-          }
-
-          const successCount = audioBlobsRef.current.filter(b => b !== null).length;
-          audioGenerated = successCount > 0;
-          if (successCount > 0) addTTSUsage(finalScript.length);
-
-          if (failedCount > 0 && successCount > 0) {
-            setAudioStatus("done");
-            setError(`Audio: ${successCount}/${audioChunks.length} chunks OK. ${failedCount} failed — click "Retry Audio" to fill gaps.`);
-          } else if (successCount > 0) {
-            setAudioStatus("done");
-          } else { setAudioStatus("error"); setError("All audio chunks failed."); }
-        } catch { setAudioStatus("error"); }
-      }
-    }
-
-    // Save after audio
-    if (panelResult) {
-      savePipeline({ novelName, style, script: finalScript, scriptStatus: "done", audioStatus: audioGenerated ? "done" : "error", audioBase64: null, audioMime: "audio/mpeg", panelStatus: "done", panels: panelResult, imageStatus: "pending", voiceInfo: voice });
-    }
-
-    // ── STEP 4: IMAGES (one by one) ──
+    // ═══════════════════════════════════════════════════════
+    //  STEP 3+4: PANEL BY PANEL — Audio then Image for each
+    // ═══════════════════════════════════════════════════════
     if (panelResult && panelResult.length > 0) {
+      const audioKey = getApiKey(voice.provider === "gemini" ? "gemini" : "openai");
       const imgKey = getImageApiKey(selectedImageModel);
-      if (!imgKey) { setError("Gemini or OpenAI key needed for images."); pipelineRunning.current = false; return; }
       const imgProvider = getImageProvider(selectedImageModel);
+
+      setAudioStatus("running");
       setImageStatus("running");
       setImagesGenerated(0);
+      audioBlobsRef.current = new Array(panelResult.length).fill(null);
+
+      console.log(`Panel-by-panel: ${panelResult.length} panels — audio + image for each`);
 
       for (let i = 0; i < panelResult.length; i++) {
-        setPanels(prev => prev.map((p, idx) => idx === i ? { ...p, imageStatus: "generating" as const } : p));
-        try {
-          const res = await fetch("/api/novel/image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: panelResult[i].imagePrompt, provider: imgProvider, apiKey: imgKey, model: selectedImageModel }) });
-          if (res.ok) {
-            const data = await res.json();
-            panelResult[i] = { ...panelResult[i], imageUrl: data.imageUrl, imageStatus: "done" };
-            setPanels(prev => prev.map((p, idx) => idx === i ? panelResult![i] : p));
-          } else {
-            const e = await res.json().catch(() => ({}));
-            panelResult[i] = { ...panelResult[i], imageStatus: "error", imageError: e.error || "Failed" };
-            setPanels(prev => prev.map((p, idx) => idx === i ? panelResult![i] : p));
+        console.log(`Panel ${i+1}/${panelResult.length}: ${panelResult[i].narration.split(/\s+/).length} words`);
+
+        // ── 3A: Generate AUDIO for this panel ──
+        if (audioKey && panelResult[i].audioStatus !== "done") {
+          setPanels(prev => prev.map((p, idx) => idx === i ? { ...p, audioStatus: "generating" as const } : p));
+          try {
+            const res = await fetch("/api/audio", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ script: panelResult[i].narration, voice: voice.voice, provider: voice.provider, apiKey: audioKey }),
+            });
+            if (res.ok) {
+              const blob = await res.blob();
+              if (blob.size > 0) {
+                audioBlobsRef.current[i] = blob;
+                const url = URL.createObjectURL(blob);
+                panelResult[i] = { ...panelResult[i], audioUrl: url, audioStatus: "done" };
+                console.log(`Panel ${i+1} audio OK: ${(blob.size/1024).toFixed(0)}KB`);
+              } else {
+                panelResult[i] = { ...panelResult[i], audioStatus: "error" };
+              }
+            } else {
+              panelResult[i] = { ...panelResult[i], audioStatus: "error" };
+            }
+          } catch {
+            panelResult[i] = { ...panelResult[i], audioStatus: "error" };
           }
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : "Failed";
-          panelResult[i] = { ...panelResult[i], imageStatus: "error", imageError: msg };
-          setPanels(prev => prev.map((p, idx) => idx === i ? panelResult![i] : p));
         }
-        setImagesGenerated(prev => prev + 1);
-        // Save after each image
-        savePipeline({ novelName, style, script: finalScript, scriptStatus: "done", audioStatus: audioGenerated ? "done" : "error", audioBase64: null, audioMime: "audio/mpeg", panelStatus: "done", panels: panelResult, imageStatus: "running", voiceInfo: voice });
+
+        // ── 3B: Generate IMAGE for this panel ──
+        if (imgKey && panelResult[i].imageStatus !== "done") {
+          setPanels(prev => prev.map((p, idx) => idx === i ? { ...p, ...panelResult![i], imageStatus: "generating" as const } : p));
+          try {
+            const res = await fetch("/api/novel/image", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ prompt: panelResult[i].imagePrompt, provider: imgProvider, apiKey: imgKey, model: selectedImageModel }),
+            });
+            if (res.ok) {
+              const data = await res.json();
+              panelResult[i] = { ...panelResult[i], imageUrl: data.imageUrl, imageStatus: "done" };
+            } else {
+              const e = await res.json().catch(() => ({}));
+              panelResult[i] = { ...panelResult[i], imageStatus: "error", imageError: e.error || "Failed" };
+            }
+          } catch (err: unknown) {
+            panelResult[i] = { ...panelResult[i], imageStatus: "error", imageError: err instanceof Error ? err.message : "Failed" };
+          }
+        }
+
+        // Update UI after each panel
+        setPanels(prev => prev.map((p, idx) => idx === i ? panelResult![i] : p));
+        setImagesGenerated(i + 1);
+
+        // Merge all audio blobs so far for the full player
+        const allBlobs = audioBlobsRef.current.filter((b): b is Blob => b !== null);
+        if (allBlobs.length > 0) {
+          const merged = new Blob(allBlobs, { type: allBlobs[0].type || "audio/mpeg" });
+          setAudioUrl(URL.createObjectURL(merged));
+        }
+
+        // Save progress after each panel
+        savePipeline({ novelName, style, script: finalScript, scriptStatus: "done", audioStatus: "running", audioBase64: null, audioMime: "audio/mpeg", panelStatus: "done", panels: panelResult, imageStatus: "running", voiceInfo: voice });
       }
-      setImageStatus("done");
-      savePipeline({ novelName, style, script: finalScript, scriptStatus: "done", audioStatus: audioGenerated ? "done" : "error", audioBase64: null, audioMime: "audio/mpeg", panelStatus: "done", panels: panelResult, imageStatus: "done", voiceInfo: voice });
+
+      // Final status
+      const audiosDone = panelResult.filter(p => p.audioStatus === "done").length;
+      const imagesDone = panelResult.filter(p => p.imageStatus === "done").length;
+
+      setAudioStatus(audiosDone > 0 ? "done" : "error");
+      setImageStatus(imagesDone > 0 ? "done" : "pending");
+      if (audiosDone > 0) addTTSUsage(finalScript.length);
+
+      if (audiosDone < panelResult.length || imagesDone < panelResult.length) {
+        setError(`Done: ${audiosDone}/${panelResult.length} audio, ${imagesDone}/${panelResult.length} images. Use Retry for failed ones.`);
+      }
+
+      savePipeline({ novelName, style, script: finalScript, scriptStatus: "done", audioStatus: audiosDone > 0 ? "done" : "error", audioBase64: null, audioMime: "audio/mpeg", panelStatus: "done", panels: panelResult, imageStatus: imagesDone > 0 ? "done" : "pending", voiceInfo: voice });
     }
 
     setPhase("done");
@@ -709,6 +719,8 @@ export default function NovelPage() {
   const successImages = panels.filter(p => p.imageStatus === "done").length;
   const erroredImages = panels.filter(p => p.imageStatus === "error").length;
   const doneImages = successImages + erroredImages;
+  const successAudios = panels.filter(p => p.audioStatus === "done").length;
+  const erroredAudios = panels.filter(p => p.audioStatus === "error").length;
 
   // Progress weights: Script=5%, Panels=15%, Audio=20%, Images=60%
   const overallProgress = (() => {
@@ -836,19 +848,20 @@ export default function NovelPage() {
                       <span className="text-sm font-medium text-foreground">Step 3 — Audio</span>
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-muted">
-                          {audioStatus === "done" && audioUrl ? `${voiceInfo.presetLabel || voiceInfo.voice} — 100%`
+                          {totalPanels > 0 && (audioStatus === "running" || audioStatus === "done")
+                            ? `${successAudios}/${totalPanels}${erroredAudios > 0 ? ` (${erroredAudios} failed)` : ""} — ${Math.round((successAudios/totalPanels)*100)}%`
                             : audioStatus === "done" && !audioUrl ? "Generated but lost — regenerate"
-                            : audioStatus === "running" ? `${voiceInfo.presetLabel || voiceInfo.voice}...`
-                            : audioStatus === "error" ? "Failed" : "Waiting"}
+                            : audioStatus === "error" ? "Failed"
+                            : "Waiting"}
                         </span>
-                        {(audioStatus === "error" || (audioStatus === "done" && !audioUrl)) && !pipelineRunning.current && (
+                        {(audioStatus === "error" || (audioStatus === "done" && !audioUrl) || erroredAudios > 0) && !pipelineRunning.current && (
                           <button onClick={retryAudio} className="text-[10px] px-2 py-0.5 rounded-md bg-violet-500/15 text-violet-400 hover:bg-violet-500/25 transition-all font-medium">
-                            {audioUrl ? "Retry Audio" : "Generate Audio"}
+                            {erroredAudios > 0 ? `Retry ${erroredAudios} Audio` : audioUrl ? "Retry Audio" : "Generate Audio"}
                           </button>
                         )}
                       </div>
                     </div>
-                    <div className="h-1 mt-1.5 bg-card-border rounded-full overflow-hidden"><div className="h-full bg-violet-500 rounded-full transition-all duration-500" style={{ width: audioStatus === "done" ? "100%" : audioStatus === "running" ? "40%" : "0%" }} /></div>
+                    <div className="h-1 mt-1.5 bg-card-border rounded-full overflow-hidden"><div className="h-full bg-violet-500 rounded-full transition-all duration-500" style={{ width: totalPanels > 0 ? `${(successAudios/totalPanels)*100}%` : audioStatus === "done" ? "100%" : "0%" }} /></div>
                   </div>
                 </div>
                 {/* Step 4: Images */}
