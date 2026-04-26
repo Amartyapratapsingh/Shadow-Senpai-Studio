@@ -6,15 +6,16 @@ function buildImagePrompt(rawPrompt: string): string {
   // Remove any existing style prefix to avoid duplication
   let clean = rawPrompt.replace(/^(Japanese anime|Anime art style|manga art)[^.]*\.\s*/i, "").trim();
 
-  return `Japanese anime 2D illustration in LANDSCAPE 16:9 widescreen format.
+  return `Modern Japanese anime illustration in LANDSCAPE 16:9 widescreen format.
 
-ART STYLE (MANDATORY — this is the most important instruction):
-- Pure Japanese anime / manga 2D art style — like a frame from a high-budget anime series (Demon Slayer, Solo Leveling, Jujutsu Kaisen quality)
-- Cel-shaded coloring with clean bold lineart
-- Anime character proportions: large expressive eyes with detailed irises, stylized colorful hair, sharp jaw lines
-- Vibrant saturated anime color palette
-- Dramatic anime-style lighting: rim lighting, volumetric light beams, glowing effects
-- NOT realistic, NOT photographic, NOT 3D render — PURE 2D ANIME illustration
+ART STYLE (MANDATORY):
+- Modern Japanese anime style — like Classroom of the Elite, Solo Leveling, Horimiya, My Dress-Up Darling
+- Soft cel-shading with detailed proportions — NOT old-school, NOT exaggerated
+- Realistic anime proportions: detailed expressive eyes (not overly large), natural hair colors, proper body proportions
+- Clean modern character designs with detailed clothing folds and textures
+- Soft ambient lighting with subtle highlights and shadows
+- Background art: detailed, realistic environments with anime aesthetic
+- NOT chibi, NOT cartoonish, NOT 3D render — MODERN 2D ANIME
 
 SCENE TO DRAW:
 ${clean}

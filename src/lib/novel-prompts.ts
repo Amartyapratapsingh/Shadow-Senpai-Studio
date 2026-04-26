@@ -1,7 +1,50 @@
 /**
  * Novel Video Creation Prompts
  * HYBRID: Client rough-split → AI smart scene breaks → AI image prompts
+ * CHARACTER CONSISTENCY: Claude creates character sheets, used in every image
  */
+
+/**
+ * STEP 0: CHARACTER DESIGN SHEET
+ * Claude reads the script and creates a FIXED visual design for every character.
+ * This is used in EVERY image prompt to keep characters looking the same.
+ */
+export function getCharacterSheetPrompt(script: string): string {
+  // Only send first ~3000 words to identify characters
+  const preview = script.split(/\s+/).slice(0, 3000).join(" ");
+
+  return `You are an anime character designer. Read the script below and identify ALL named characters. For each character, create a FIXED visual design that will be used in every image.
+
+IMPORTANT: These descriptions will be copy-pasted into EVERY image prompt, so they must be:
+- Specific and detailed enough to generate consistent images
+- Written as image generation keywords (not sentences)
+- The SAME description used every single time the character appears
+
+For each character, provide:
+- Name
+- Gender, approximate age
+- Hair: exact color, length, style (e.g., "short messy jet-black hair with bangs over forehead")
+- Eyes: exact color, shape (e.g., "sharp dark brown eyes, narrow, intense gaze")
+- Face: shape, features (e.g., "angular jawline, fair skin, slight stubble")
+- Build: body type (e.g., "tall, lean athletic build")
+- Outfit: default clothing (e.g., "white button-up shirt with rolled sleeves, black pants")
+- Distinguishing features: scars, accessories, etc.
+
+ART STYLE REFERENCE: Modern Japanese anime like Classroom of the Elite, Solo Leveling, Horimiya — soft cel-shading, detailed realistic proportions, large but not exaggerated eyes, natural hair colors, clean modern clothing.
+
+OUTPUT FORMAT (strict JSON, no markdown):
+[
+  {
+    "name": "Character Name",
+    "prompt": "young man, early 20s, short messy jet-black hair with bangs over forehead, sharp dark brown eyes with intense gaze, angular jawline, fair skin, tall lean athletic build, white button-up shirt with rolled sleeves and black pants"
+  }
+]
+
+SCRIPT:
+${preview}
+
+Output ONLY the JSON array:`;
+}
 
 export function getNovelScriptPrompt(
   novelName: string,
@@ -99,7 +142,7 @@ Output ONLY the JSON array:`;
  */
 export function getImagePromptForScene(narration: string, sceneNumber: number, totalScenes: number, characterRef?: string): string {
   const charInstruction = characterRef
-    ? `\nCHARACTER REFERENCE (same appearance):\n${characterRef}`
+    ? `\nCHARACTER DESIGNS (use EXACTLY these descriptions — do NOT change any character's appearance):\n${characterRef}`
     : "";
 
   return `You are an anime art director. Read this narration and write an image prompt for the EXACT MOMENT described.
@@ -108,18 +151,18 @@ NARRATION (panel ${sceneNumber}/${totalScenes}):
 "${narration}"
 ${charInstruction}
 
-IMPORTANT: The image must show EXACTLY what this narration describes. Pick the FIRST or MOST DRAMATIC specific moment.
-- If it says "he grabbed the axe" → show him grabbing an axe, NOT something else
-- If it says "tears rolled down her face" → show her crying, NOT her smiling
-- If it says "he walked into the rain" → show him walking into rain, NOT inside a building
+ART STYLE (MANDATORY): Modern Japanese anime — like Classroom of the Elite, Solo Leveling, Horimiya quality. Soft cel-shading, detailed realistic proportions, natural hair colors, clean modern look. NOT old-school manga. NOT chibi. NOT cartoonish.
 
-Write the prompt as:
-1. "Japanese anime 2D illustration, manga art style, cel-shaded coloring, clean lineart."
-2. The SPECIFIC moment: who is doing what, their exact expression and pose
-3. Characters: anime features — large eyes, stylized hair (specify color), outfit details
-4. Setting: exact location, background elements
-5. Mood: lighting style, color palette
-6. Camera: angle (low/high/close-up/wide)
+IMAGE MUST SHOW: The EXACT moment from this narration. Pick the most dramatic visual moment.
 
-Output ONLY the prompt text, nothing else:`;
+Write the prompt following this structure:
+1. "Modern Japanese anime illustration, soft cel-shading, detailed realistic proportions, 16:9 cinematic widescreen."
+2. The SPECIFIC action/moment happening
+3. Characters EXACTLY as described in the character designs above (copy their description word-for-word)
+4. Expressions and poses matching the emotion of the scene
+5. Setting: specific location, background details
+6. Lighting: dramatic, matching mood (warm indoor, cold outdoor, neon, etc.)
+7. Camera angle
+
+Output ONLY the prompt text:`;
 }

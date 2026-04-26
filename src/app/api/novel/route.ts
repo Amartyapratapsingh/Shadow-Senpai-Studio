@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AIConfig } from "@/lib/types";
-import { getNovelScriptPrompt, getSmartSceneBreakPrompt, getImagePromptForScene } from "@/lib/novel-prompts";
+import { getNovelScriptPrompt, getSmartSceneBreakPrompt, getImagePromptForScene, getCharacterSheetPrompt } from "@/lib/novel-prompts";
 
 export const maxDuration = 300;
 
@@ -63,6 +63,22 @@ export async function POST(request: NextRequest) {
 
     if (!config?.apiKey || !config?.provider) {
       return NextResponse.json({ error: "API key required. Add in Settings." }, { status: 400 });
+    }
+
+    // ── Action 0: Character Sheet — analyze script and create fixed character designs ──
+    if (action === "character-sheet") {
+      if (!script?.trim()) return NextResponse.json({ error: "Script required" }, { status: 400 });
+      const prompt = getCharacterSheetPrompt(script);
+      try {
+        const result = await callAI(config, prompt, 4096);
+        const characters = extractJSON(result) as { name: string; prompt: string }[];
+        if (Array.isArray(characters) && characters.length > 0) {
+          return NextResponse.json({ characters });
+        }
+        return NextResponse.json({ error: "No characters found" }, { status: 500 });
+      } catch {
+        return NextResponse.json({ error: "Failed to parse character designs" }, { status: 500 });
+      }
     }
 
     // ── Action 1: Generate script ──

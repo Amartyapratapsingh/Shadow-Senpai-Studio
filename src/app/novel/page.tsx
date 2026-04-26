@@ -391,6 +391,29 @@ export default function NovelPage() {
     // Save after script
     saveCurrentState(finalScript, "done", "pending", null, "pending", [], "pending", voice);
 
+    // ── STEP 1.5: CHARACTER SHEET — Claude creates fixed designs for every character ──
+    let characterRef = "";
+    {
+      const config = getScriptConfig(selectedTextModel);
+      if (config) {
+        console.log("Generating character sheet...");
+        try {
+          const res = await fetch("/api/novel", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "character-sheet", config, script: finalScript }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.characters && Array.isArray(data.characters)) {
+              characterRef = data.characters.map((c: { name: string; prompt: string }) => `${c.name}: ${c.prompt}`).join("\n");
+              console.log(`Character sheet: ${data.characters.length} characters identified`);
+              data.characters.forEach((c: { name: string; prompt: string }) => console.log(`  - ${c.name}: ${c.prompt.slice(0, 80)}...`));
+            }
+          }
+        } catch { console.log("Character sheet generation failed — continuing without"); }
+      }
+    }
+
     // ── Audio chunker (splits by sentences for audio only) ──
     const splitForAudio = (text: string, maxWords: number = 2000): string[] => {
       const allWords = text.split(/\s+/);
@@ -566,7 +589,7 @@ export default function NovelPage() {
             try {
               const enhanceRes = await fetch("/api/novel", {
                 method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "image-prompt", config: textConfig, narration: panelResult[i].narration.slice(0, 800), sceneNumber: i+1, totalScenes: panelResult.length }),
+                body: JSON.stringify({ action: "image-prompt", config: textConfig, narration: panelResult[i].narration.slice(0, 800), sceneNumber: i+1, totalScenes: panelResult.length, characterRef }),
               });
               if (enhanceRes.ok) {
                 const eData = await enhanceRes.json();
