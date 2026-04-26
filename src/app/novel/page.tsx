@@ -102,10 +102,12 @@ const TEXT_MODELS = [
 
 // ── Image generation models ──
 const IMAGE_MODELS = [
+  { id: "gpt-image-1.5", label: "GPT Image 1.5 (Latest)", provider: "openai" },
+  { id: "gpt-image-1", label: "GPT Image 1", provider: "openai" },
+  { id: "gpt-image-1-mini", label: "GPT Image 1 Mini (Fast)", provider: "openai" },
   { id: "gemini-2.5-flash-image", label: "Gemini 2.5 Flash Image", provider: "gemini" },
   { id: "gemini-3.1-flash-image-preview", label: "Gemini 3.1 Flash Image", provider: "gemini" },
   { id: "gemini-3-pro-image-preview", label: "Gemini 3 Pro Image (4K)", provider: "gemini" },
-  { id: "gpt-image-1", label: "GPT Image 1", provider: "openai" },
 ];
 
 function getScriptConfig(selectedModel?: string) {
@@ -177,7 +179,7 @@ export default function NovelPage() {
   const [selectedGenre, setSelectedGenre] = useState<NovelGenre>(NOVEL_GENRES[0]);
   const [customGenreText, setCustomGenreText] = useState("");
   const [selectedTextModel, setSelectedTextModel] = useState("claude-sonnet-4-6");
-  const [selectedImageModel, setSelectedImageModel] = useState("gemini-2.5-flash-image");
+  const [selectedImageModel, setSelectedImageModel] = useState("gpt-image-1.5");
 
   const [phase, setPhase] = useState<"input" | "running" | "paused" | "done">("input");
   const [savedPipelineData, setSavedPipelineData] = useState<SavedPipeline | null>(null);
