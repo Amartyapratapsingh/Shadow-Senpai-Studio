@@ -1,10 +1,6 @@
 /**
  * Novel Video Creation Prompts
- *
- * HYBRID approach:
- * - Client-side rough split into ~3000 word chunks (FREE)
- * - AI reads each chunk and detects natural scene breaks (CHEAP)
- * - AI generates image prompts per scene (CHEAP)
+ * HYBRID: Client rough-split → AI smart scene breaks → AI image prompts
  */
 
 export function getNovelScriptPrompt(
@@ -19,84 +15,77 @@ export function getNovelScriptPrompt(
   return `You are an expert manhwa/manhua/web novel YouTube narrator. Write a dramatic, cinematic narration script for: "${novelName}"
 ${genreInstruction}
 
-NARRATION STYLE (follow this exactly):
-- Write like you're narrating a MOVIE — scene by scene, moment by moment
-- SHORT, PUNCHY sentences for action: "I lunged forward." "My fist connected." "She crashed to the floor."
-- LONGER, flowing sentences for emotional moments
-- Include character dialogue naturally woven into narration — not with quote labels
-- Build TENSION: slow before reveals, fast during fights
-- Vivid physical descriptions: "His face went pale." "Her knuckles turned white."
-- Show reactions: "She took an involuntary step back." "His fists clenched."
-- Dramatic transitions: "That's when everything changed." "But I wasn't done."
-- Make the viewer FEEL the character's emotions — anger, revenge, satisfaction
-- Write in ${style} style
+NARRATION STYLE:
+- Scene by scene, moment by moment — like narrating a movie
+- Short punchy sentences for action. Longer flowing sentences for emotion.
+- Dialogue woven naturally into narration
+- Vivid physical descriptions and character reactions
+- Write in a ${style} style
 - Write in the SAME language as the novel name
 
 RULES:
-- Write ONLY the spoken narration. No headers, labels, brackets, or formatting.
-- 1500-2500 words.
-- Stay faithful to the original plot if known.
-- NO markdown, NO stage directions, NO brackets.
-- Pure spoken text ready for AI voice generation.
+- ONLY spoken narration. No headers, labels, brackets, formatting.
+- 1500-2500 words. Stay faithful to plot.
+- Pure spoken text for AI voice generation.
 
 Write the full script now:`;
 }
 
 /**
- * AI SCENE DETECTION — reads a ~3000 word chunk and finds natural scene breaks.
+ * AI SCENE DETECTION — reads ~3000 words and finds natural scene breaks.
  *
- * The AI splits BY MEANING, not by word count:
- * - Location changes
- * - Time jumps (next day, later that night)
- * - New character enters
- * - Mood/tone shifts
- * - Action changes (fight starts, conversation begins)
- *
- * Output: Array of scenes with the EXACT narration text + image description.
- * Cost: ~3000 tokens input, ~2000 tokens output per chunk = CHEAP
+ * KEY RULE: Each scene = ONE SPECIFIC VISUAL MOMENT.
+ * The image must show EXACTLY what's described in THAT panel's narration.
+ * NOT a summary. NOT a later moment. THE EXACT moment.
  */
 export function getSmartSceneBreakPrompt(chunk: string, chunkIndex: number, totalChunks: number): string {
   const wordCount = chunk.trim().split(/\s+/).length;
   const targetScenes = Math.max(3, Math.ceil(wordCount / 150));
 
-  return `You are a film director breaking a script into visual scenes for an anime video.
+  return `You are an anime storyboard artist breaking a script into VISUAL PANELS for a video.
 
-Read this section of a script and divide it into ${targetScenes} scenes based on NATURAL STORY TRANSITIONS.
+Each panel = ONE SPECIFIC VISUAL MOMENT that can be captured in a single image.
 
-Break scenes when:
-- Location changes (moving to a new place)
-- Time passes (next morning, later, after a while)
-- A new important character appears
-- The mood shifts dramatically (happy to sad, calm to action)
-- The action changes (talking → fighting, walking → running)
+Think of it like keyframes in an anime episode — each panel shows ONE freeze-frame of the story.
 
-RULES:
-- This is chunk ${chunkIndex}/${totalChunks} of the full script
-- Output exactly the narration text for each scene — copy it EXACTLY from the script, word for word, same language
-- NEVER change, translate, summarize, or skip any word from the script
-- Scene 1 starts at the first word of this chunk
-- The last scene ends at the last word of this chunk
-- Together, all scenes must contain the COMPLETE text of this chunk — nothing missing, nothing added
-- The "imageDescription" must be in ENGLISH regardless of the script language
-- The "imageDescription" must be a DETAILED anime image prompt, NOT a short summary
+WHEN TO CREATE A NEW PANEL:
+- A character DOES something new (picks up object, opens door, throws punch)
+- A character's EXPRESSION changes significantly (surprise, anger, tears)
+- The CAMERA would move to a different angle/position
+- A new CHARACTER appears or enters the frame
+- The LOCATION changes
+- Time passes
 
-IMAGE DESCRIPTION RULES (CRITICAL):
-- Start with the exact art style: "Japanese anime 2D illustration, manga art style, cel-shaded coloring, clean lineart"
-- Describe characters with ANIME features: large expressive eyes, stylized colorful hair, dynamic poses, exaggerated expressions
-- Describe the EXACT moment happening: what characters are doing, their expressions, body language
-- Include setting details: location, time of day, weather, background elements
-- Include mood/atmosphere: dramatic lighting, color palette, emotional tone
-- Be SPECIFIC — not "a scene in a room" but "a dimly lit CEO office with floor-to-ceiling windows showing a night cityscape, mahogany desk, the young man in a torn shirt standing defiantly facing a powerful businessman in an expensive suit"
+CRITICAL RULE — IMAGE ACCURACY:
+The "imageDescription" must describe ONLY what happens in THAT panel's narration text.
+- If the narration says "a lemon fell on his head" — the image shows a lemon falling on his head. NOT a girl wiping his face (that's a different panel).
+- If the narration says "she walked into the room" — the image shows her walking in. NOT her already sitting down.
+- Pick the FIRST or MOST DRAMATIC moment from the panel's narration for the image.
+- NEVER show something from a LATER or EARLIER panel.
 
-OUTPUT FORMAT (strict JSON, no markdown, no code blocks, no extra text):
+NARRATION RULES:
+- Copy narration text EXACTLY from the script — word for word, same language
+- NEVER change, translate, summarize, or skip any word
+- All panels together must contain the COMPLETE text — nothing missing
+- This is chunk ${chunkIndex}/${totalChunks}
+
+IMAGE DESCRIPTION RULES:
+- MUST be in ENGLISH regardless of narration language
+- Start with: "Japanese anime 2D illustration, manga art style, cel-shaded coloring, clean lineart."
+- Describe the EXACT MOMENT from this panel's narration ONLY
+- Anime characters: large expressive eyes, stylized hair, dynamic poses
+- Include: setting, lighting, mood, camera angle
+- Be VERY specific about what characters are DOING and their EXPRESSIONS
+
+OUTPUT FORMAT (strict JSON, no markdown, no code blocks):
 [
   {
-    "narration": "exact text from script in original language for this scene...",
-    "imageDescription": "Japanese anime 2D illustration, manga art style, cel-shaded coloring, clean lineart. [detailed scene with anime character descriptions, setting, mood, lighting, camera angle]"
+    "narration": "exact text from script...",
+    "imageDescription": "Japanese anime 2D illustration, manga art style, cel-shaded coloring, clean lineart. [EXACT moment from THIS narration only — specific character actions, expressions, setting, lighting]"
   }
 ]
 
-SCRIPT SECTION (${wordCount} words, break into ~${targetScenes} scenes):
+SCRIPT (${wordCount} words, ~${targetScenes} panels):
 
 ${chunk}
 
@@ -104,32 +93,32 @@ Output ONLY the JSON array:`;
 }
 
 /**
- * IMAGE PROMPT — generates a detailed anime image prompt for a scene.
- * Input: ~150 words of narration
- * Output: ~50 words of image prompt
- * Cost: TINY
+ * IMAGE PROMPT — Claude generates a detailed anime prompt from narration.
+ * Used when scene splitting gives a weak/generic description.
  */
 export function getImagePromptForScene(narration: string, sceneNumber: number, totalScenes: number, characterRef?: string): string {
   const charInstruction = characterRef
-    ? `\n\nCHARACTER REFERENCE (use EXACT same appearance):\n${characterRef}`
+    ? `\nCHARACTER REFERENCE (same appearance):\n${characterRef}`
     : "";
 
-  return `You are an anime art director. Read this narration and write a DETAILED image prompt for generating a Japanese anime illustration.
+  return `You are an anime art director. Read this narration and write an image prompt for the EXACT MOMENT described.
 
-NARRATION (scene ${sceneNumber}/${totalScenes}):
+NARRATION (panel ${sceneNumber}/${totalScenes}):
 "${narration}"
 ${charInstruction}
 
-Write the image prompt following this EXACT structure:
-1. Start with: "Japanese anime 2D illustration, manga art style, cel-shaded coloring, clean lineart."
-2. Describe the KEY MOMENT — what is the most visual/dramatic moment in this narration?
-3. Describe each CHARACTER visible: anime-style features (large expressive eyes, stylized hair color, outfit, expression, pose)
-4. Describe the SETTING: exact location, time of day, background details
-5. Describe the MOOD: lighting (dramatic shadows, golden hour, neon glow), color palette, atmosphere
-6. Describe the CAMERA: angle (low angle for power, close-up for emotion, wide shot for environment)
+IMPORTANT: The image must show EXACTLY what this narration describes. Pick the FIRST or MOST DRAMATIC specific moment.
+- If it says "he grabbed the axe" → show him grabbing an axe, NOT something else
+- If it says "tears rolled down her face" → show her crying, NOT her smiling
+- If it says "he walked into the rain" → show him walking into rain, NOT inside a building
 
-EXAMPLE of good output:
-"Japanese anime 2D illustration, manga art style, cel-shaded coloring, clean lineart. A young man with messy black hair and fierce golden eyes stands defiantly in a luxurious mansion foyer, his torn casual clothes contrasting with the opulent marble floors. He grips a fire axe on his shoulder, smirking. Behind him, five beautiful women in designer dresses recoil in shock, their faces pale with disbelief. Dramatic low-angle shot, warm chandelier lighting casting long shadows, rich burgundy and gold color palette."
+Write the prompt as:
+1. "Japanese anime 2D illustration, manga art style, cel-shaded coloring, clean lineart."
+2. The SPECIFIC moment: who is doing what, their exact expression and pose
+3. Characters: anime features — large eyes, stylized hair (specify color), outfit details
+4. Setting: exact location, background elements
+5. Mood: lighting style, color palette
+6. Camera: angle (low/high/close-up/wide)
 
-Output ONLY the image prompt text. No headers, no labels:`;
+Output ONLY the prompt text, nothing else:`;
 }
