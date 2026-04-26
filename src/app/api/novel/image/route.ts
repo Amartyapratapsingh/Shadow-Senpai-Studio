@@ -96,6 +96,7 @@ export async function POST(request: NextRequest) {
 
     const imgProvider = (provider || "openai") as ImageProvider;
     const imgModel = model || (imgProvider === "gemini" ? "gemini-2.5-flash-image" : "gpt-image-1.5");
+    console.log(`[Image API] provider=${imgProvider}, model=${imgModel}, prompt_length=${prompt.length}`);
 
     // SAME prompt for both providers — consistent quality
     const fullPrompt = buildImagePrompt(prompt);

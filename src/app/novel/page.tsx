@@ -547,6 +547,13 @@ export default function NovelPage() {
       const imgKey = getImageApiKey(selectedImageModel);
       const imgProvider = getImageProvider(selectedImageModel);
 
+      console.log(`=== PIPELINE STEP 3+4 ===`);
+      console.log(`Image model: ${selectedImageModel}`);
+      console.log(`Image provider: ${imgProvider}`);
+      console.log(`Audio provider: ${voice.provider}`);
+      console.log(`Panels: ${panelResult.length}`);
+      console.log(`Character ref: ${characterRef ? "YES (" + characterRef.length + " chars)" : "NONE"}`);
+
       setAudioStatus("running");
       setImageStatus("running");
       setImagesGenerated(0);
