@@ -40,7 +40,8 @@ Write the full script now:`;
  */
 export function getSmartSceneBreakPrompt(chunk: string, chunkIndex: number, totalChunks: number): string {
   const wordCount = chunk.trim().split(/\s+/).length;
-  const targetScenes = Math.max(3, Math.ceil(wordCount / 150));
+  // ~70 words per panel = ONE visual moment = image matches exactly
+  const targetScenes = Math.max(5, Math.ceil(wordCount / 70));
 
   return `You are an anime storyboard artist breaking a script into VISUAL PANELS for a video.
 

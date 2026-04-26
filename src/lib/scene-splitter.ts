@@ -82,9 +82,9 @@ export function roughSplitIntoChunks(script: string, maxWords: number = 3000): s
 
 /**
  * FALLBACK: Pure client-side scene splitting (if AI fails).
- * Groups sentences into ~150 word scenes.
+ * Groups sentences into ~70 word scenes (one visual moment each).
  */
-export function fallbackSplitIntoScenes(script: string, wordsPerScene: number = 150): Scene[] {
+export function fallbackSplitIntoScenes(script: string, wordsPerScene: number = 70): Scene[] {
   const sentences = splitIntoSentences(script);
   const scenes: Scene[] = [];
   let currentSentences: string[] = [];

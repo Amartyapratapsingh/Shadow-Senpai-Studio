@@ -285,10 +285,10 @@ export default function NovelPage() {
                 const data = await res.json();
                 if (data.scenes) for (const s of data.scenes) { allPanels.push({ panel: allPanels.length+1, narration: s.narration||"", imagePrompt: `Anime art style, 16:9 cinematic widescreen illustration. ${s.imageDescription||""}`, imageStatus: "pending", audioStatus: "pending" }); }
               } else {
-                const fb = fallbackSplitIntoScenes(chunks[c], 150);
+                const fb = fallbackSplitIntoScenes(chunks[c], 70);
                 for (const f of fb) allPanels.push({ panel: allPanels.length+1, narration: f.narration, imagePrompt: "Anime art style, 16:9 cinematic widescreen illustration.", imageStatus: "pending", audioStatus: "pending" });
               }
-            } catch { const fb = fallbackSplitIntoScenes(chunks[c], 150); for (const f of fb) allPanels.push({ panel: allPanels.length+1, narration: f.narration, imagePrompt: "Anime art style, 16:9 cinematic widescreen illustration.", imageStatus: "pending", audioStatus: "pending" }); }
+            } catch { const fb = fallbackSplitIntoScenes(chunks[c], 70); for (const f of fb) allPanels.push({ panel: allPanels.length+1, narration: f.narration, imagePrompt: "Anime art style, 16:9 cinematic widescreen illustration.", imageStatus: "pending", audioStatus: "pending" }); }
             setPanels([...allPanels]);
           }
           saved.panels = allPanels; saved.panelStatus = "done"; setPanelStatus("done"); savePipeline(saved);
@@ -449,7 +449,7 @@ export default function NovelPage() {
               } else {
                 // If AI fails for this chunk, use client-side fallback for just this chunk
                 console.warn(`AI failed for chunk ${c + 1}, using fallback`);
-                const fallbackScenes = fallbackSplitIntoScenes(chunks[c], 150);
+                const fallbackScenes = fallbackSplitIntoScenes(chunks[c], 70);
                 for (const fs of fallbackScenes) {
                   allPanels.push({
                     panel: allPanels.length + 1,
@@ -462,7 +462,7 @@ export default function NovelPage() {
               }
             } catch {
               // Fallback for this chunk
-              const fallbackScenes = fallbackSplitIntoScenes(chunks[c], 150);
+              const fallbackScenes = fallbackSplitIntoScenes(chunks[c], 70);
               for (const fs of fallbackScenes) {
                 allPanels.push({
                   panel: allPanels.length + 1,
@@ -477,7 +477,7 @@ export default function NovelPage() {
         } else {
           // No AI key — pure client-side fallback (FREE but dumber scene breaks)
           console.log(`No AI key — pure client-side split (${totalWords} words)`);
-          const fallbackScenes = fallbackSplitIntoScenes(finalScript, 150);
+          const fallbackScenes = fallbackSplitIntoScenes(finalScript, 70);
           for (const fs of fallbackScenes) {
             allPanels.push({
               panel: allPanels.length + 1,
