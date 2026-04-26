@@ -204,6 +204,8 @@ export default function NovelPage() {
   // Track individual audio chunks — persist in memory so we can retry only failed ones
   const audioBlobsRef = useRef<(Blob | null)[]>([]);
   const audioChunksRef = useRef<string[]>([]);
+  // Character sheet — persists so retries use the same character descriptions
+  const characterRefStore = useRef<string>("");
 
   const [panelStatus, setPanelStatus] = useState<StepStatus>("pending");
   const [panels, setPanels] = useState<Panel[]>([]);
@@ -392,8 +394,8 @@ export default function NovelPage() {
     saveCurrentState(finalScript, "done", "pending", null, "pending", [], "pending", voice);
 
     // ── STEP 1.5: CHARACTER SHEET — Claude creates fixed designs for every character ──
-    let characterRef = "";
-    {
+    let characterRef = characterRefStore.current || "";
+    if (!characterRef) {
       const config = getScriptConfig(selectedTextModel);
       if (config) {
         console.log("Generating character sheet...");
@@ -406,6 +408,7 @@ export default function NovelPage() {
             const data = await res.json();
             if (data.characters && Array.isArray(data.characters)) {
               characterRef = data.characters.map((c: { name: string; prompt: string }) => `${c.name}: ${c.prompt}`).join("\n");
+              characterRefStore.current = characterRef; // Store persistently
               console.log(`Character sheet: ${data.characters.length} characters identified`);
               data.characters.forEach((c: { name: string; prompt: string }) => console.log(`  - ${c.name}: ${c.prompt.slice(0, 80)}...`));
             }
@@ -582,10 +585,10 @@ export default function NovelPage() {
 
         // ── 3B: Use Claude/AI to enhance image prompt if it's too basic ──
         if (imgKey && panelResult[i].imageStatus !== "done") {
-          // If the image prompt is generic, ask Claude to write a better anime prompt from the narration
+          // ALWAYS use Claude to generate image prompt with character descriptions
           let finalImagePrompt = panelResult[i].imagePrompt;
           const textConfig = getScriptConfig(selectedTextModel);
-          if (textConfig && (!finalImagePrompt || finalImagePrompt.length < 100 || finalImagePrompt.includes("A scene from the story"))) {
+          if (textConfig) {
             try {
               const enhanceRes = await fetch("/api/novel", {
                 method: "POST", headers: { "Content-Type": "application/json" },
@@ -610,12 +613,17 @@ export default function NovelPage() {
             if (res.ok) {
               const data = await res.json();
               panelResult[i] = { ...panelResult[i], imageUrl: data.imageUrl, imageStatus: "done" };
+              console.log(`Panel ${i+1} image OK`);
             } else {
               const e = await res.json().catch(() => ({}));
-              panelResult[i] = { ...panelResult[i], imageStatus: "error", imageError: e.error || "Failed" };
+              const errMsg = e.error || `HTTP ${res.status}`;
+              console.error(`Panel ${i+1} image FAILED: ${errMsg}`);
+              panelResult[i] = { ...panelResult[i], imageStatus: "error", imageError: errMsg };
             }
           } catch (err: unknown) {
-            panelResult[i] = { ...panelResult[i], imageStatus: "error", imageError: err instanceof Error ? err.message : "Failed" };
+            const errMsg = err instanceof Error ? err.message : "Network error";
+            console.error(`Panel ${i+1} image ERROR: ${errMsg}`);
+            panelResult[i] = { ...panelResult[i], imageStatus: "error", imageError: errMsg };
           }
         }
 
@@ -729,10 +737,29 @@ export default function NovelPage() {
     if (erroredPanels.length === 0) { pipelineRunning.current = false; return; }
 
     setImageStatus("running");
+    const charRef = characterRefStore.current;
+
     for (const pp of erroredPanels) {
       setPanels(prev => prev.map((p, i) => i === pp.idx ? { ...p, imageStatus: "generating" as const, imageError: undefined } : p));
+
+      // Enhance prompt with character ref if available
+      let finalPrompt = pp.imagePrompt;
+      if (charRef && !finalPrompt.includes(charRef.slice(0, 30))) {
+        // Use Claude to generate a proper prompt with character descriptions
+        const textConfig = getScriptConfig(selectedTextModel);
+        if (textConfig) {
+          try {
+            const enhanceRes = await fetch("/api/novel", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "image-prompt", config: textConfig, narration: pp.narration.slice(0, 800), sceneNumber: pp.panel, totalScenes: panels.length, characterRef: charRef }),
+            });
+            if (enhanceRes.ok) { const eData = await enhanceRes.json(); if (eData.imagePrompt) finalPrompt = eData.imagePrompt; }
+          } catch {}
+        }
+      }
+
       try {
-        const res = await fetch("/api/novel/image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: pp.imagePrompt, provider: imgProvider, apiKey: imgKey, model: selectedImageModel }) });
+        const res = await fetch("/api/novel/image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: finalPrompt, provider: imgProvider, apiKey: imgKey, model: selectedImageModel }) });
         if (res.ok) {
           const data = await res.json();
           setPanels(prev => { const u = prev.map((p, i) => i === pp.idx ? { ...p, imageUrl: data.imageUrl, imageStatus: "done" as const, imageError: undefined } : p); const saved = loadPipeline(); if (saved) { saved.panels = u; savePipeline(saved); } return u; });
