@@ -102,12 +102,14 @@ const TEXT_MODELS = [
 
 // ── Image generation models ──
 const IMAGE_MODELS = [
-  { id: "gpt-image-1.5", label: "GPT Image 1.5 (Latest)", provider: "openai" },
+  // OpenAI
+  { id: "gpt-image-1.5", label: "ChatGPT Images 2.0 (Newest)", provider: "openai" },
   { id: "gpt-image-1", label: "GPT Image 1", provider: "openai" },
   { id: "gpt-image-1-mini", label: "GPT Image 1 Mini (Fast)", provider: "openai" },
-  { id: "gemini-2.5-flash-image", label: "Gemini 2.5 Flash Image", provider: "gemini" },
+  // Gemini
+  { id: "gemini-3-pro-image-preview", label: "Gemini 3 Pro Image (Best, 4K)", provider: "gemini" },
   { id: "gemini-3.1-flash-image-preview", label: "Gemini 3.1 Flash Image", provider: "gemini" },
-  { id: "gemini-3-pro-image-preview", label: "Gemini 3 Pro Image (4K)", provider: "gemini" },
+  { id: "gemini-2.5-flash-image", label: "Gemini 2.5 Flash Image (Fast)", provider: "gemini" },
 ];
 
 function getScriptConfig(selectedModel?: string) {
