@@ -83,29 +83,42 @@ Write the full script now:`;
  */
 export function getSmartSceneBreakPrompt(chunk: string, chunkIndex: number, totalChunks: number): string {
   const wordCount = chunk.trim().split(/\s+/).length;
-  // ~70 words per panel = ONE visual moment = image matches exactly
-  const targetScenes = Math.max(5, Math.ceil(wordCount / 70));
+  // Let AI decide the count — don't force a number
+  const minScenes = Math.max(5, Math.ceil(wordCount / 100));
+  const maxScenes = Math.ceil(wordCount / 30);
 
-  return `You are an anime storyboard artist breaking a script into VISUAL PANELS for a video.
+  return `You are an anime CAMERA OPERATOR deciding where to cut between shots.
 
-Each panel = ONE SPECIFIC VISUAL MOMENT that can be captured in a single image.
+Each panel = ONE CAMERA SHOT = ONE still image.
 
-Think of it like keyframes in an anime episode — each panel shows ONE freeze-frame of the story.
+Imagine you are filming this as a real anime. Each panel is ONE camera shot — what the camera SEES in that single moment before it cuts to the next shot.
 
-WHEN TO CREATE A NEW PANEL:
-- A character DOES something new (picks up object, opens door, throws punch)
-- A character's EXPRESSION changes significantly (surprise, anger, tears)
-- The CAMERA would move to a different angle/position
-- A new CHARACTER appears or enters the frame
-- The LOCATION changes
-- Time passes
+THE GOLDEN RULE: If you cannot show EVERYTHING in the panel's text in ONE single image, the panel is too long. Split it.
 
-CRITICAL RULE — IMAGE ACCURACY:
-The "imageDescription" must describe ONLY what happens in THAT panel's narration text.
-- If the narration says "a lemon fell on his head" — the image shows a lemon falling on his head. NOT a girl wiping his face (that's a different panel).
-- If the narration says "she walked into the room" — the image shows her walking in. NOT her already sitting down.
-- Pick the FIRST or MOST DRAMATIC moment from the panel's narration for the image.
-- NEVER show something from a LATER or EARLIER panel.
+EXAMPLE OF CORRECT SPLITTING:
+Script: "Rain was pouring from the sky. He pulled out his gun and aimed. The bullet hit the man and he collapsed to the ground."
+
+WRONG (too many moments in one panel):
+Panel 1: "Rain was pouring from the sky. He pulled out his gun and aimed. The bullet hit the man and he collapsed to the ground."
+→ Image can't show rain + shooting + falling all at once
+
+CORRECT (one camera shot per panel):
+Panel 1: "Rain was pouring from the sky."
+→ Image: Dark rainy sky, heavy rain falling on a street
+Panel 2: "He pulled out his gun and aimed."
+→ Image: Close-up of man holding gun, aiming forward, rain on his face
+Panel 3: "The bullet hit the man and he collapsed to the ground."
+→ Image: Man falling backwards, impact moment, rain splashing around him
+
+HOW TO DECIDE WHERE TO CUT:
+- Each panel should describe ONE thing the camera sees
+- If the text has TWO actions (he did X AND Y) → split into two panels
+- If a new character appears → new panel
+- If location or time changes → new panel
+- If the emotion/mood shifts → new panel
+- Dialogue can stay with the action it accompanies
+
+AIM for ${minScenes} to ${maxScenes} panels from this chunk. More panels = better image accuracy.
 
 NARRATION RULES:
 - Copy narration text EXACTLY from the script — word for word, same language
@@ -116,8 +129,9 @@ NARRATION RULES:
 IMAGE DESCRIPTION RULES:
 - MUST be in ENGLISH regardless of narration language
 - Start with: "Anime TV episode frame, flat cel-shading, visible black outlines, 16:9."
-- Describe the EXACT MOMENT from this panel's narration ONLY
-- Anime characters: flat color skin, chunky hair strands, simple clean eyes with highlight dot
+- Describe EXACTLY what the camera sees in this ONE SHOT — nothing more, nothing less
+- If narration says "rain falling" → image shows rain. If narration says "he aimed gun" → image shows him aiming.
+- Anime characters: flat color skin, chunky hair strands, simple clean eyes
 - Include: setting, lighting, mood, camera angle
 - Be VERY specific about what characters are DOING and their EXPRESSIONS
 
@@ -129,7 +143,7 @@ OUTPUT FORMAT (strict JSON, no markdown, no code blocks):
   }
 ]
 
-SCRIPT (${wordCount} words, ~${targetScenes} panels):
+SCRIPT (${wordCount} words, ${minScenes}-${maxScenes} panels):
 
 ${chunk}
 
