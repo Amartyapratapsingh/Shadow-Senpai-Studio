@@ -3,19 +3,28 @@ import { NextRequest, NextResponse } from "next/server";
 type ImageProvider = "openai" | "gemini";
 
 function buildImagePrompt(rawPrompt: string): string {
-  let clean = rawPrompt.replace(/^Anime art style[^.]*\.\s*/i, "").trim();
+  // Remove any existing style prefix to avoid duplication
+  let clean = rawPrompt.replace(/^(Japanese anime|Anime art style|manga art)[^.]*\.\s*/i, "").trim();
 
-  return `Generate exactly ONE single anime illustration. LANDSCAPE orientation. Width is much greater than height. Aspect ratio 16:9.
+  return `Japanese anime 2D illustration in LANDSCAPE 16:9 widescreen format.
 
-SCENE: ${clean}
+ART STYLE (MANDATORY — this is the most important instruction):
+- Pure Japanese anime / manga 2D art style — like a frame from a high-budget anime series (Demon Slayer, Solo Leveling, Jujutsu Kaisen quality)
+- Cel-shaded coloring with clean bold lineart
+- Anime character proportions: large expressive eyes with detailed irises, stylized colorful hair, sharp jaw lines
+- Vibrant saturated anime color palette
+- Dramatic anime-style lighting: rim lighting, volumetric light beams, glowing effects
+- NOT realistic, NOT photographic, NOT 3D render — PURE 2D ANIME illustration
 
-STRICT RULES:
-- ONE single image only. NOT a comic strip. NOT multiple panels. NOT split screen. NOT side by side images. Just ONE scene.
-- LANDSCAPE orientation — wider than tall, like a movie screenshot or a YouTube video thumbnail.
-- Anime/manga 2D art style, clean lineart, cel-shaded, vibrant colors, cinematic lighting.
-- NO text, NO subtitles, NO captions, NO watermarks, NO logos, NO words anywhere on the image.
-- NO borders, NO frames, NO black bars. Fill the entire canvas.
-- ONE clear scene with ONE composition. Not a collage.`;
+SCENE TO DRAW:
+${clean}
+
+COMPOSITION:
+- ONE single landscape scene (16:9 ratio, wider than tall)
+- Cinematic camera angle — like a key frame from an anime episode
+- NOT a comic strip, NOT multiple panels, NOT split screen
+- NO text, NO subtitles, NO captions, NO watermarks anywhere on the image
+- Fill the entire canvas with the illustration`;
 }
 
 // ── OpenAI ──
@@ -23,12 +32,7 @@ async function generateOpenAIImage(apiKey: string, prompt: string, model: string
   const res = await fetch("https://api.openai.com/v1/images/generations", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: model,
-      prompt,
-      n: 1,
-      size: "1536x1024",
-    }),
+    body: JSON.stringify({ model: model, prompt, n: 1, size: "1536x1024" }),
   });
 
   if (!res.ok) {
@@ -53,9 +57,7 @@ async function generateGeminiImage(apiKey: string, prompt: string, model: string
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseModalities: ["TEXT", "IMAGE"],
-        },
+        generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
       }),
     }
   );
@@ -67,15 +69,11 @@ async function generateGeminiImage(apiKey: string, prompt: string, model: string
 
   const data = await res.json();
   const parts = data?.candidates?.[0]?.content?.parts;
-
   if (parts) {
     for (const part of parts) {
-      if (part.inlineData) {
-        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-      }
+      if (part.inlineData) return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
     }
   }
-
   throw new Error("No image returned from Gemini");
 }
 
@@ -83,20 +81,16 @@ async function generateGeminiImage(apiKey: string, prompt: string, model: string
 export async function POST(request: NextRequest) {
   try {
     const { prompt, provider, apiKey, model } = await request.json();
-
     if (!prompt?.trim()) return NextResponse.json({ error: "Image prompt required" }, { status: 400 });
     if (!apiKey?.trim()) return NextResponse.json({ error: "API key required" }, { status: 400 });
 
-    const imgProvider = (provider || "gemini") as ImageProvider;
-    const imgModel = model || (imgProvider === "gemini" ? "gemini-2.5-flash-image" : "gpt-image-1");
+    const imgProvider = (provider || "openai") as ImageProvider;
+    const imgModel = model || (imgProvider === "gemini" ? "gemini-2.5-flash-image" : "gpt-image-1.5");
     const fullPrompt = buildImagePrompt(prompt);
 
-    let imageUrl: string;
-    if (imgProvider === "gemini") {
-      imageUrl = await generateGeminiImage(apiKey, fullPrompt, imgModel);
-    } else {
-      imageUrl = await generateOpenAIImage(apiKey, fullPrompt, imgModel);
-    }
+    const imageUrl = imgProvider === "gemini"
+      ? await generateGeminiImage(apiKey, fullPrompt, imgModel)
+      : await generateOpenAIImage(apiKey, fullPrompt, imgModel);
 
     return NextResponse.json({ imageUrl });
   } catch (error: unknown) {

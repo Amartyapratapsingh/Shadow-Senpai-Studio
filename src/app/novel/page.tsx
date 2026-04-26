@@ -551,13 +551,32 @@ export default function NovelPage() {
           }
         }
 
-        // ── 3B: Generate IMAGE for this panel ──
+        // ── 3B: Use Claude/AI to enhance image prompt if it's too basic ──
         if (imgKey && panelResult[i].imageStatus !== "done") {
+          // If the image prompt is generic, ask Claude to write a better anime prompt from the narration
+          let finalImagePrompt = panelResult[i].imagePrompt;
+          const textConfig = getScriptConfig(selectedTextModel);
+          if (textConfig && (!finalImagePrompt || finalImagePrompt.length < 100 || finalImagePrompt.includes("A scene from the story"))) {
+            try {
+              const enhanceRes = await fetch("/api/novel", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "image-prompt", config: textConfig, narration: panelResult[i].narration.slice(0, 800), sceneNumber: i+1, totalScenes: panelResult.length }),
+              });
+              if (enhanceRes.ok) {
+                const eData = await enhanceRes.json();
+                if (eData.imagePrompt && eData.imagePrompt.length > 50) {
+                  finalImagePrompt = eData.imagePrompt;
+                  panelResult[i] = { ...panelResult[i], imagePrompt: finalImagePrompt };
+                }
+              }
+            } catch {}
+          }
+
           setPanels(prev => prev.map((p, idx) => idx === i ? { ...p, ...panelResult![i], imageStatus: "generating" as const } : p));
           try {
             const res = await fetch("/api/novel/image", {
               method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ prompt: panelResult[i].imagePrompt, provider: imgProvider, apiKey: imgKey, model: selectedImageModel }),
+              body: JSON.stringify({ prompt: finalImagePrompt, provider: imgProvider, apiKey: imgKey, model: selectedImageModel }),
             });
             if (res.ok) {
               const data = await res.json();

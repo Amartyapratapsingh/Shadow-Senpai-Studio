@@ -78,12 +78,21 @@ RULES:
 - The last scene ends at the last word of this chunk
 - Together, all scenes must contain the COMPLETE text of this chunk — nothing missing, nothing added
 - The "imageDescription" must be in ENGLISH regardless of the script language
+- The "imageDescription" must be a DETAILED anime image prompt, NOT a short summary
+
+IMAGE DESCRIPTION RULES (CRITICAL):
+- Start with the exact art style: "Japanese anime 2D illustration, manga art style, cel-shaded coloring, clean lineart"
+- Describe characters with ANIME features: large expressive eyes, stylized colorful hair, dynamic poses, exaggerated expressions
+- Describe the EXACT moment happening: what characters are doing, their expressions, body language
+- Include setting details: location, time of day, weather, background elements
+- Include mood/atmosphere: dramatic lighting, color palette, emotional tone
+- Be SPECIFIC — not "a scene in a room" but "a dimly lit CEO office with floor-to-ceiling windows showing a night cityscape, mahogany desk, the young man in a torn shirt standing defiantly facing a powerful businessman in an expensive suit"
 
 OUTPUT FORMAT (strict JSON, no markdown, no code blocks, no extra text):
 [
   {
     "narration": "exact text from script in original language for this scene...",
-    "imageDescription": "A short English description of the visual scene for anime image generation"
+    "imageDescription": "Japanese anime 2D illustration, manga art style, cel-shaded coloring, clean lineart. [detailed scene with anime character descriptions, setting, mood, lighting, camera angle]"
   }
 ]
 
@@ -105,17 +114,22 @@ export function getImagePromptForScene(narration: string, sceneNumber: number, t
     ? `\n\nCHARACTER REFERENCE (use EXACT same appearance):\n${characterRef}`
     : "";
 
-  return `Generate a detailed anime image prompt for scene ${sceneNumber}/${totalScenes}.
+  return `You are an anime art director. Read this narration and write a DETAILED image prompt for generating a Japanese anime illustration.
 
-NARRATION:
+NARRATION (scene ${sceneNumber}/${totalScenes}):
 "${narration}"
 ${charInstruction}
 
-Write ONE image prompt that:
-- Starts with "Anime art style, 16:9 cinematic widescreen illustration."
-- Describes the EXACT scene from the narration
-- Includes: characters, setting, mood, lighting, camera angle
-- Is in English
+Write the image prompt following this EXACT structure:
+1. Start with: "Japanese anime 2D illustration, manga art style, cel-shaded coloring, clean lineart."
+2. Describe the KEY MOMENT — what is the most visual/dramatic moment in this narration?
+3. Describe each CHARACTER visible: anime-style features (large expressive eyes, stylized hair color, outfit, expression, pose)
+4. Describe the SETTING: exact location, time of day, background details
+5. Describe the MOOD: lighting (dramatic shadows, golden hour, neon glow), color palette, atmosphere
+6. Describe the CAMERA: angle (low angle for power, close-up for emotion, wide shot for environment)
 
-Output ONLY the image prompt, nothing else:`;
+EXAMPLE of good output:
+"Japanese anime 2D illustration, manga art style, cel-shaded coloring, clean lineart. A young man with messy black hair and fierce golden eyes stands defiantly in a luxurious mansion foyer, his torn casual clothes contrasting with the opulent marble floors. He grips a fire axe on his shoulder, smirking. Behind him, five beautiful women in designer dresses recoil in shock, their faces pale with disbelief. Dramatic low-angle shot, warm chandelier lighting casting long shadows, rich burgundy and gold color palette."
+
+Output ONLY the image prompt text. No headers, no labels:`;
 }
