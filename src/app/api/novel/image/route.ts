@@ -19,12 +19,12 @@ STRICT RULES:
 }
 
 // ── OpenAI ──
-async function generateOpenAIImage(apiKey: string, prompt: string): Promise<string> {
+async function generateOpenAIImage(apiKey: string, prompt: string, model: string = "gpt-image-1"): Promise<string> {
   const res = await fetch("https://api.openai.com/v1/images/generations", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model: "gpt-image-1",
+      model: model,
       prompt,
       n: 1,
       size: "1536x1024",
@@ -45,9 +45,9 @@ async function generateOpenAIImage(apiKey: string, prompt: string): Promise<stri
 }
 
 // ── Gemini ──
-async function generateGeminiImage(apiKey: string, prompt: string): Promise<string> {
+async function generateGeminiImage(apiKey: string, prompt: string, model: string = "gemini-2.5-flash-image"): Promise<string> {
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -82,17 +82,21 @@ async function generateGeminiImage(apiKey: string, prompt: string): Promise<stri
 // ── Main ──
 export async function POST(request: NextRequest) {
   try {
-    const { prompt, provider, apiKey } = await request.json();
+    const { prompt, provider, apiKey, model } = await request.json();
 
     if (!prompt?.trim()) return NextResponse.json({ error: "Image prompt required" }, { status: 400 });
     if (!apiKey?.trim()) return NextResponse.json({ error: "API key required" }, { status: 400 });
 
     const imgProvider = (provider || "gemini") as ImageProvider;
+    const imgModel = model || (imgProvider === "gemini" ? "gemini-2.5-flash-image" : "gpt-image-1");
     const fullPrompt = buildImagePrompt(prompt);
 
-    const imageUrl = imgProvider === "gemini"
-      ? await generateGeminiImage(apiKey, fullPrompt)
-      : await generateOpenAIImage(apiKey, fullPrompt);
+    let imageUrl: string;
+    if (imgProvider === "gemini") {
+      imageUrl = await generateGeminiImage(apiKey, fullPrompt, imgModel);
+    } else {
+      imageUrl = await generateOpenAIImage(apiKey, fullPrompt, imgModel);
+    }
 
     return NextResponse.json({ imageUrl });
   } catch (error: unknown) {

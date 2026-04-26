@@ -85,8 +85,37 @@ function loadPipeline(): SavedPipeline | null {
 }
 function clearPipeline() { localStorage.removeItem(PIPELINE_KEY); }
 
-// ── Auto-pick best AI ──
-function getScriptConfig() {
+// ── Text AI models (for script + scene splitting) ──
+const TEXT_MODELS = [
+  { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", provider: "anthropic", tier: "recommended" },
+  { id: "claude-opus-4-6", label: "Claude Opus 4.6", provider: "anthropic", tier: "best" },
+  { id: "claude-haiku-4-5", label: "Claude Haiku 4.5", provider: "anthropic", tier: "fast" },
+  { id: "gpt-4.1", label: "GPT-4.1", provider: "openai", tier: "recommended" },
+  { id: "gpt-5.4", label: "GPT-5.4", provider: "openai", tier: "best" },
+  { id: "gpt-4o-mini", label: "GPT-4o Mini", provider: "openai", tier: "fast" },
+  { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", provider: "gemini", tier: "recommended" },
+  { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", provider: "gemini", tier: "best" },
+  { id: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite", provider: "gemini", tier: "fast" },
+];
+
+// ── Image generation models ──
+const IMAGE_MODELS = [
+  { id: "gemini-2.5-flash-image", label: "Gemini 2.5 Flash Image", provider: "gemini" },
+  { id: "gemini-3.1-flash-image-preview", label: "Gemini 3.1 Flash Image", provider: "gemini" },
+  { id: "gemini-3-pro-image-preview", label: "Gemini 3 Pro Image (4K)", provider: "gemini" },
+  { id: "gpt-image-1", label: "GPT Image 1", provider: "openai" },
+  { id: "gpt-5.4-image-2", label: "GPT-5.4 Image 2 (Latest)", provider: "openai" },
+];
+
+function getScriptConfig(selectedModel?: string) {
+  if (selectedModel) {
+    const model = TEXT_MODELS.find(m => m.id === selectedModel);
+    if (model) {
+      const key = getApiKey(model.provider as "openai" | "anthropic" | "gemini");
+      if (key) return { provider: model.provider, model: model.id, apiKey: key };
+    }
+  }
+  // Auto fallback
   const ck = getApiKey("anthropic");
   if (ck) return { provider: "anthropic", model: "claude-sonnet-4-6", apiKey: ck };
   const ok = getApiKey("openai");
@@ -95,8 +124,31 @@ function getScriptConfig() {
   if (gk) return { provider: "gemini", model: "gemini-2.5-flash", apiKey: gk };
   return null;
 }
-function getImageApiKey() { return getApiKey("gemini") || getApiKey("openai") || null; }
-function getImageProvider(): "openai" | "gemini" { return getApiKey("gemini") ? "gemini" : "openai"; }
+function getImageConfig(selectedModel?: string) {
+  if (selectedModel) {
+    const model = IMAGE_MODELS.find(m => m.id === selectedModel);
+    if (model) {
+      const key = getApiKey(model.provider as "openai" | "gemini");
+      if (key) return { provider: model.provider, model: model.id, apiKey: key };
+    }
+  }
+  const gk = getApiKey("gemini");
+  if (gk) return { provider: "gemini", model: "gemini-2.5-flash-image", apiKey: gk };
+  const ok = getApiKey("openai");
+  if (ok) return { provider: "openai", model: "gpt-image-1", apiKey: ok };
+  return null;
+}
+function getImageApiKey(imgModel?: string) {
+  if (imgModel) {
+    const m = IMAGE_MODELS.find(x => x.id === imgModel);
+    if (m) { const k = getApiKey(m.provider as "openai" | "gemini"); if (k) return k; }
+  }
+  return getApiKey("gemini") || getApiKey("openai") || null;
+}
+function getImageProvider(imgModel?: string): "openai" | "gemini" {
+  if (imgModel) { const m = IMAGE_MODELS.find(x => x.id === imgModel); if (m) return m.provider as "openai" | "gemini"; }
+  return getApiKey("gemini") ? "gemini" : "openai";
+}
 
 function loadVoicePresets(): [VoicePreset | null, VoicePreset | null, VoicePreset | null] {
   try { const raw = localStorage.getItem("manhuascript_voice_presets"); if (!raw) return [null,null,null]; const p = JSON.parse(raw); return [p[0]||null,p[1]||null,p[2]||null]; } catch { return [null,null,null]; }
@@ -123,6 +175,8 @@ export default function NovelPage() {
   const [style, setStyle] = useState("engaging-and-dramatic");
   const [selectedGenre, setSelectedGenre] = useState<NovelGenre>(NOVEL_GENRES[0]);
   const [customGenreText, setCustomGenreText] = useState("");
+  const [selectedTextModel, setSelectedTextModel] = useState("claude-sonnet-4-6");
+  const [selectedImageModel, setSelectedImageModel] = useState("gemini-2.5-flash-image");
 
   const [phase, setPhase] = useState<"input" | "running" | "paused" | "done">("input");
   const [savedPipelineData, setSavedPipelineData] = useState<SavedPipeline | null>(null);
@@ -213,7 +267,7 @@ export default function NovelPage() {
 
     // ── Step 2: Resume panels if needed (hybrid approach) ──
     if (saved.panelStatus !== "done" && saved.panelStatus !== "error") {
-      const config = getScriptConfig();
+      const config = getScriptConfig(selectedTextModel);
       if (config) {
         setPanelStatus("running");
         try {
@@ -265,13 +319,13 @@ export default function NovelPage() {
     // ── Step 4: Resume images (only pending/errored ones) ──
     const pendingPanels = saved.panels.map((p, i) => ({ ...p, idx: i })).filter(p => p.imageStatus === "pending" || p.imageStatus === "generating" || p.imageStatus === "error");
     if (pendingPanels.length > 0) {
-      const imgKey = getImageApiKey(); const imgProvider = getImageProvider();
+      const imgKey = getImageApiKey(selectedImageModel); const imgProvider = getImageProvider(selectedImageModel);
       if (imgKey) {
         setImageStatus("running");
         for (const pp of pendingPanels) {
           setPanels(prev => prev.map((p, i) => i === pp.idx ? { ...p, imageStatus: "generating" as const } : p));
           try {
-            const res = await fetch("/api/novel/image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: pp.imagePrompt, provider: imgProvider, apiKey: imgKey }) });
+            const res = await fetch("/api/novel/image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: pp.imagePrompt, provider: imgProvider, apiKey: imgKey, model: selectedImageModel }) });
             if (res.ok) { const data = await res.json(); setPanels(prev => { const u = prev.map((p, i) => i === pp.idx ? { ...p, imageUrl: data.imageUrl, imageStatus: "done" as const, imageError: undefined } : p); saved.panels = u; savePipeline(saved); return u; }); }
             else { const e = await res.json().catch(() => ({})); setPanels(prev => { const u = prev.map((p, i) => i === pp.idx ? { ...p, imageStatus: "error" as const, imageError: e.error || "Failed" } : p); saved.panels = u; savePipeline(saved); return u; }); }
           } catch (err: unknown) { const msg = err instanceof Error ? err.message : "Failed"; setPanels(prev => { const u = prev.map((p, i) => i === pp.idx ? { ...p, imageStatus: "error" as const, imageError: msg } : p); saved.panels = u; savePipeline(saved); return u; }); }
@@ -310,7 +364,7 @@ export default function NovelPage() {
       setScript(finalScript);
       setScriptStatus("done");
     } else {
-      const config = getScriptConfig();
+      const config = getScriptConfig(selectedTextModel);
       if (!config) { setError("No API key. Add in Settings."); setScriptStatus("error"); pipelineRunning.current = false; return; }
       try {
         const res = await fetch("/api/novel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "generate-script", config, novelName, style, genreHint: selectedGenre.id === "custom" ? customGenreText : selectedGenre.promptHint }) });
@@ -348,7 +402,7 @@ export default function NovelPage() {
     let panelResult: Panel[] | null = null as Panel[] | null;
     {
       setPanelStatus("running");
-      const config = getScriptConfig();
+      const config = getScriptConfig(selectedTextModel);
 
       try {
         const totalWords = finalScript.split(/\s+/).length;
@@ -502,16 +556,16 @@ export default function NovelPage() {
 
     // ── STEP 4: IMAGES (one by one) ──
     if (panelResult && panelResult.length > 0) {
-      const imgKey = getImageApiKey();
+      const imgKey = getImageApiKey(selectedImageModel);
       if (!imgKey) { setError("Gemini or OpenAI key needed for images."); pipelineRunning.current = false; return; }
-      const imgProvider = getImageProvider();
+      const imgProvider = getImageProvider(selectedImageModel);
       setImageStatus("running");
       setImagesGenerated(0);
 
       for (let i = 0; i < panelResult.length; i++) {
         setPanels(prev => prev.map((p, idx) => idx === i ? { ...p, imageStatus: "generating" as const } : p));
         try {
-          const res = await fetch("/api/novel/image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: panelResult[i].imagePrompt, provider: imgProvider, apiKey: imgKey }) });
+          const res = await fetch("/api/novel/image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: panelResult[i].imagePrompt, provider: imgProvider, apiKey: imgKey, model: selectedImageModel }) });
           if (res.ok) {
             const data = await res.json();
             panelResult[i] = { ...panelResult[i], imageUrl: data.imageUrl, imageStatus: "done" };
@@ -606,8 +660,8 @@ export default function NovelPage() {
     if (pipelineRunning.current) return;
     pipelineRunning.current = true;
     setError("");
-    const imgKey = getImageApiKey();
-    const imgProvider = getImageProvider();
+    const imgKey = getImageApiKey(selectedImageModel);
+    const imgProvider = getImageProvider(selectedImageModel);
     if (!imgKey) { setError("No image API key"); pipelineRunning.current = false; return; }
 
     const erroredPanels = panels.map((p, i) => ({ ...p, idx: i })).filter(p => p.imageStatus === "error" || p.imageStatus === "pending");
@@ -617,7 +671,7 @@ export default function NovelPage() {
     for (const pp of erroredPanels) {
       setPanels(prev => prev.map((p, i) => i === pp.idx ? { ...p, imageStatus: "generating" as const, imageError: undefined } : p));
       try {
-        const res = await fetch("/api/novel/image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: pp.imagePrompt, provider: imgProvider, apiKey: imgKey }) });
+        const res = await fetch("/api/novel/image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: pp.imagePrompt, provider: imgProvider, apiKey: imgKey, model: selectedImageModel }) });
         if (res.ok) {
           const data = await res.json();
           setPanels(prev => { const u = prev.map((p, i) => i === pp.idx ? { ...p, imageUrl: data.imageUrl, imageStatus: "done" as const, imageError: undefined } : p); const saved = loadPipeline(); if (saved) { saved.panels = u; savePipeline(saved); } return u; });
@@ -691,12 +745,40 @@ export default function NovelPage() {
         {/* ═══════ INPUT ═══════ */}
         {phase === "input" && (
           <div className="space-y-4 max-w-2xl mx-auto">
+            {/* Model Selection */}
             <div className="rounded-2xl glass-card p-4">
-              <div className="flex items-center gap-2 mb-3"><Cpu className="w-4 h-4 text-primary" /><h3 className="text-xs font-semibold text-foreground">Fully automatic — AI picks the best model</h3></div>
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                <div className="rounded-lg bg-background p-2.5 border border-card-border"><p className="text-muted mb-1">Script & Panels</p><p className="font-semibold text-foreground">{hasKeys.anthropic ? "Claude Sonnet 4.6" : hasKeys.openai ? "GPT-4.1" : hasKeys.gemini ? "Gemini 2.5 Flash" : "No key"}</p></div>
-                <div className="rounded-lg bg-background p-2.5 border border-card-border"><p className="text-muted mb-1">Images (Anime)</p><p className="font-semibold text-foreground">{hasKeys.gemini ? "Gemini Flash Image" : hasKeys.openai ? "OpenAI gpt-image-1" : "No key"}</p></div>
-                <div className="rounded-lg bg-background p-2.5 border border-card-border"><div className="flex items-center gap-1 mb-1"><Mic className="w-3 h-3 text-muted" /><p className="text-muted">Audio</p></div><p className="font-semibold text-foreground">{voiceInfo.presetLabel || `${voiceInfo.voice}`}</p></div>
+              <div className="flex items-center gap-2 mb-3"><Cpu className="w-4 h-4 text-primary" /><h3 className="text-xs font-semibold text-foreground">AI Models</h3></div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                {/* Text AI Model */}
+                <div>
+                  <label className="block text-muted mb-1.5">Script & Panels</label>
+                  <select value={selectedTextModel} onChange={e => setSelectedTextModel(e.target.value)}
+                    className="w-full px-2.5 py-2 rounded-lg bg-background border border-card-border text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 appearance-none cursor-pointer">
+                    {TEXT_MODELS.filter(m => getApiKey(m.provider as "openai"|"anthropic"|"gemini")).map(m => (
+                      <option key={m.id} value={m.id}>{m.label} {m.tier === "best" ? "(Best)" : m.tier === "fast" ? "(Fast)" : ""}</option>
+                    ))}
+                    {TEXT_MODELS.filter(m => getApiKey(m.provider as "openai"|"anthropic"|"gemini")).length === 0 && (
+                      <option disabled>No API keys — add in Settings</option>
+                    )}
+                  </select>
+                </div>
+                {/* Image Model */}
+                <div>
+                  <label className="block text-muted mb-1.5">Image Generation</label>
+                  <select value={selectedImageModel} onChange={e => setSelectedImageModel(e.target.value)}
+                    className="w-full px-2.5 py-2 rounded-lg bg-background border border-card-border text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 appearance-none cursor-pointer">
+                    {IMAGE_MODELS.filter(m => getApiKey(m.provider as "openai"|"gemini")).map(m => (
+                      <option key={m.id} value={m.id}>{m.label}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* Audio */}
+                <div>
+                  <label className="block text-muted mb-1.5">Audio Voice</label>
+                  <div className="px-2.5 py-2 rounded-lg bg-background border border-card-border text-foreground">
+                    {voiceInfo.presetLabel || `${voiceInfo.voice}`}
+                  </div>
+                </div>
               </div>
               {!anyKey && <Link href="/settings" className="flex items-center gap-1.5 mt-3 text-xs text-amber-400 font-medium hover:underline"><KeyRound className="w-3.5 h-3.5" /> Add API keys in Settings</Link>}
             </div>
