@@ -564,43 +564,56 @@ export default function NovelPage() {
       for (let i = 0; i < panelResult.length; i++) {
         console.log(`Panel ${i+1}/${panelResult.length}: ${panelResult[i].narration.split(/\s+/).length} words`);
 
-        // ── 3A: Generate AUDIO for this panel (with retry + delay to avoid rate limit) ──
+        // ── 3A: Generate AUDIO for this panel (try primary provider, fallback to other) ──
         if (audioKey && panelResult[i].audioStatus !== "done") {
           setPanels(prev => prev.map((p, idx) => idx === i ? { ...p, audioStatus: "generating" as const } : p));
 
           let audioSuccess = false;
-          for (let attempt = 0; attempt < 3 && !audioSuccess; attempt++) {
+
+          // Build list of providers to try: primary first, then fallback
+          const audioAttempts: { provider: string; voice: string; apiKey: string }[] = [];
+
+          // Primary: user's selected voice
+          audioAttempts.push({ provider: voice.provider, voice: voice.voice, apiKey: audioKey });
+
+          // Fallback: if primary is Gemini, try OpenAI cedar. If primary is OpenAI, try Gemini Charon.
+          const fallbackOpenAIKey = getApiKey("openai");
+          const fallbackGeminiKey = getApiKey("gemini");
+          if (voice.provider === "gemini" && fallbackOpenAIKey) {
+            audioAttempts.push({ provider: "openai", voice: "cedar", apiKey: fallbackOpenAIKey });
+          } else if (voice.provider === "openai" && fallbackGeminiKey) {
+            audioAttempts.push({ provider: "gemini", voice: "Charon", apiKey: fallbackGeminiKey });
+          }
+
+          for (const attempt of audioAttempts) {
+            if (audioSuccess) break;
             try {
-              if (attempt > 0) {
-                // Wait before retry: 3s, 6s
-                console.log(`Panel ${i+1} audio retry ${attempt+1}/3 — waiting ${attempt * 3}s`);
-                await new Promise(r => setTimeout(r, attempt * 3000));
-              }
+              console.log(`Panel ${i+1} audio: trying ${attempt.provider}/${attempt.voice}`);
               const res = await fetch("/api/audio", {
                 method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ script: panelResult[i].narration, voice: voice.voice, provider: voice.provider, apiKey: audioKey }),
+                body: JSON.stringify({ script: panelResult[i].narration, voice: attempt.voice, provider: attempt.provider, apiKey: attempt.apiKey }),
               });
               if (res.ok) {
                 const blob = await res.blob();
                 if (blob.size > 0) {
                   audioBlobsRef.current[i] = blob;
-                  const url = URL.createObjectURL(blob);
-                  panelResult[i] = { ...panelResult[i], audioUrl: url, audioStatus: "done" };
+                  panelResult[i] = { ...panelResult[i], audioUrl: URL.createObjectURL(blob), audioStatus: "done" };
                   audioSuccess = true;
-                  console.log(`Panel ${i+1} audio OK: ${(blob.size/1024).toFixed(0)}KB`);
+                  console.log(`Panel ${i+1} audio OK via ${attempt.provider}: ${(blob.size/1024).toFixed(0)}KB`);
                 }
               } else {
                 const e = await res.json().catch(() => ({}));
-                console.error(`Panel ${i+1} audio attempt ${attempt+1} failed: ${e.error || res.status}`);
+                console.error(`Panel ${i+1} audio ${attempt.provider} failed: ${e.error || res.status}`);
               }
             } catch (err) {
-              console.error(`Panel ${i+1} audio attempt ${attempt+1} error:`, err);
+              console.error(`Panel ${i+1} audio ${attempt.provider} error:`, err);
             }
           }
+
           if (!audioSuccess) panelResult[i] = { ...panelResult[i], audioStatus: "error" };
 
-          // Small delay between panels to avoid rate limit (1.5 seconds)
-          if (i < panelResult.length - 1) await new Promise(r => setTimeout(r, 1500));
+          // Delay between panels
+          if (i < panelResult.length - 1) await new Promise(r => setTimeout(r, 1000));
         }
 
         // ── 3B: Use Claude/AI to enhance image prompt if it's too basic ──

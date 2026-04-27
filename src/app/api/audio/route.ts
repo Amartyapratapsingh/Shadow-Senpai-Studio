@@ -60,9 +60,9 @@ async function generateOpenAI(
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      throw new Error(
-        `OpenAI TTS error (chunk ${i + 1}/${chunks.length}): ${err?.error?.message || response.statusText}`
-      );
+      const errMsg = err?.error?.message || response.statusText;
+      console.error(`[Audio API] OpenAI FAILED: voice=${voice}, chunk=${i+1}/${chunks.length}, status=${response.status}, error=${errMsg}`);
+      throw new Error(`OpenAI TTS error: ${errMsg}`);
     }
 
     audioBuffers.push(await response.arrayBuffer());
@@ -224,6 +224,7 @@ export async function POST(request: NextRequest) {
     }
 
     const audioProvider = (provider || "openai") as AudioProvider;
+    console.log(`[Audio API] provider=${audioProvider}, voice=${voice}, script_length=${script.length} chars`);
 
     if (audioProvider === "gemini") {
       const audioData = await generateGemini(script, voice, apiKey);
@@ -247,8 +248,8 @@ export async function POST(request: NextRequest) {
       });
     }
   } catch (error: unknown) {
-    const message =
-      error instanceof Error ? error.message : "Audio generation failed";
+    const message = error instanceof Error ? error.message : "Audio generation failed";
+    console.error(`[Audio API] FATAL ERROR: ${message}`);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
