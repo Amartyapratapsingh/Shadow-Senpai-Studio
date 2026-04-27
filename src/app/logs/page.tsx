@@ -125,17 +125,22 @@ export default function LogsPage() {
           {filtered.map(log => {
             const typeConf = TYPE_CONFIG[log.type];
             const catColor = CATEGORY_COLORS[log.category] || "text-muted";
+            const isSuccess = log.type === "ai" || log.type === "info";
+            const isError = log.type === "error";
+            const isCost = log.type === "cost";
+            const borderColor = isError ? "border-l-red-500" : isSuccess ? "border-l-emerald-500" : isCost ? "border-l-amber-500" : "border-l-white/10";
+            const bgColor = isError ? "bg-red-500/[0.03]" : isSuccess ? "bg-emerald-500/[0.02]" : "";
             return (
-              <div key={log.id} className="flex items-start gap-3 px-4 py-3 rounded-xl glass hover:bg-white/[0.03] transition-all">
+              <div key={log.id} className={`flex items-start gap-3 px-4 py-3 rounded-xl border-l-2 ${borderColor} ${bgColor} glass hover:bg-white/[0.04] transition-all`}>
                 {/* Type icon */}
-                <div className={`w-6 h-6 rounded-md ${typeConf.bg} flex items-center justify-center shrink-0 mt-0.5`}>
-                  <span className={typeConf.color}>{typeConf.icon}</span>
+                <div className={`w-6 h-6 rounded-md ${isError ? "bg-red-500/15" : isSuccess ? "bg-emerald-500/15" : typeConf.bg} flex items-center justify-center shrink-0 mt-0.5`}>
+                  <span className={isError ? "text-red-400" : isSuccess ? "text-emerald-400" : typeConf.color}>{typeConf.icon}</span>
                 </div>
                 {/* Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`text-[10px] font-bold uppercase tracking-wider ${catColor}`}>{log.category}</span>
-                    <span className="text-xs text-foreground/80">{log.message}</span>
+                    <span className={`text-xs ${isError ? "text-red-400/90" : isSuccess ? "text-emerald-400/90" : "text-foreground/80"}`}>{log.message}</span>
                   </div>
                   {/* Details */}
                   {log.details && (
@@ -150,7 +155,7 @@ export default function LogsPage() {
                         <span className="text-[10px] text-amber-400 font-medium">{formatCost(log.details.costUSD, currency)}</span>
                       )}
                       {log.details.error && (
-                        <span className="text-[10px] text-red-400 truncate max-w-md">{log.details.error}</span>
+                        <span className="text-[10px] text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">{log.details.error}</span>
                       )}
                       {log.details.panelNumber && (
                         <span className="text-[10px] text-muted">Panel #{log.details.panelNumber}</span>
