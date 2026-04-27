@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Header from "@/components/Header";
 import { getApiKey } from "@/lib/api-keys";
 import { addTextUsage, addTTSUsage, estimateTokens } from "@/lib/usage";
+import { logAI, logError } from "@/lib/logger";
 import {
   Send, Loader2, Tv, Globe, Trash2, BookOpen, User, Bot,
   Zap, Gauge, Crown, ChevronUp, Cpu, Plus, Check,
@@ -249,8 +250,9 @@ Expert in Japanese light novels, Chinese web novels, Korean web novels. Focus on
       if (data.reply.includes("[GENERATE_AUDIO]")) { assistantMsg.content = data.reply.replace("[GENERATE_AUDIO]", "").trim(); assistantMsg.action = "audio"; assistantMsg.actionData = assistantMsg.content; }
       setMessages(prev => [...prev, assistantMsg]);
       addTextUsage(config.model, estimateTokens(input), estimateTokens(data.reply));
+      logAI("research", `Chat response (${estimateTokens(data.reply)} tokens)`, config.provider, config.model, estimateTokens(input), estimateTokens(data.reply));
       if (assistantMsg.action === "audio" && assistantMsg.actionData) { const idx = messages.length + 1; setTimeout(() => generateAudio(assistantMsg.actionData!, idx), 500); }
-    } catch (err: unknown) { setMessages(prev => [...prev, { role: "assistant", content: `Error: ${err instanceof Error ? err.message : "Unknown"}` }]); }
+    } catch (err: unknown) { const msg = err instanceof Error ? err.message : "Unknown"; setMessages(prev => [...prev, { role: "assistant", content: `Error: ${msg}` }]); logError("research", "Chat failed", msg, config.provider, config.model); }
     finally { setLoading(false); }
   };
 

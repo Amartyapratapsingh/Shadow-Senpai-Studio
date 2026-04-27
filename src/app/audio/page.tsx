@@ -9,6 +9,7 @@ import {
 } from "@/lib/audio-utils";
 import { getApiKey } from "@/lib/api-keys";
 import { addTTSUsage, loadDefaultVoice, saveDefaultVoice } from "@/lib/usage";
+import { logAI, logError } from "@/lib/logger";
 import {
   ArrowLeft,
   Volume2,
@@ -151,9 +152,12 @@ export default function AudioPage() {
       setAudioUrl(URL.createObjectURL(blob));
       setStatus("done");
       addTTSUsage(script.length);
+      logAI("audio", `Audio generated (${(blob.size/1024).toFixed(0)}KB, ${wordCount} words)`, audioProvider, selectedVoice);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setError(msg);
       setStatus("error");
+      logError("audio", "Audio generation failed", msg, audioProvider, selectedVoice);
     }
   };
 

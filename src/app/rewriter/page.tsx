@@ -10,6 +10,7 @@ import OutputSection from "@/components/OutputSection";
 import { AIConfig, ChunkResult, RewriteProgress } from "@/lib/types";
 import { DURATION_OPTIONS } from "@/lib/duration";
 import { addTextUsage, estimateTokens } from "@/lib/usage";
+import { logAI, logError } from "@/lib/logger";
 import {
   Wand2,
   AlertCircle,
@@ -147,6 +148,7 @@ export default function RewriterPage() {
           const chunkInputEst = estimateTokens(chunk.original || "");
           const chunkOutputEst = estimateTokens(chunk.rewritten || "");
           addTextUsage(aiConfig.model, chunkInputEst, chunkOutputEst);
+          logAI("script", `Rewrite chunk ${i+1} done (${chunkOutputEst} tokens)`, aiConfig.provider, aiConfig.model, chunkInputEst, chunkOutputEst);
 
           setProgress((prev) => ({
             ...prev,
@@ -224,6 +226,7 @@ export default function RewriterPage() {
       const inputEst = estimateTokens(manhuaName + style);
       const outputEst = estimateTokens(data.script);
       addTextUsage(aiConfig.model, inputEst, outputEst);
+      logAI("script", `Script generated (${outputEst} tokens)`, aiConfig.provider, aiConfig.model, inputEst, outputEst);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Unknown error";
       setGenerateError(message);

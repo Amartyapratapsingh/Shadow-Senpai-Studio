@@ -9,6 +9,7 @@ import { STYLE_OPTIONS } from "@/lib/prompts";
 import { DURATION_OPTIONS } from "@/lib/duration";
 import { CATEGORY_GROUPS, Category } from "@/lib/top10-categories";
 import { addTextUsage, estimateTokens } from "@/lib/usage";
+import { logAI, logError } from "@/lib/logger";
 import {
   ListOrdered,
   AlertCircle,
@@ -119,10 +120,12 @@ export default function Top10Page() {
       );
       const outputEst = estimateTokens(data.script);
       addTextUsage(aiConfig.model, inputEst, outputEst);
+      logAI("script", `Top 10 script generated (${outputEst} tokens)`, aiConfig.provider, aiConfig.model, inputEst, outputEst);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Unknown error";
       setError(message);
       setStatus("error");
+      logError("script", "Top 10 script failed", message, aiConfig.provider, aiConfig.model);
     }
   }, [
     aiConfig,
