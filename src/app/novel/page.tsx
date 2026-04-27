@@ -287,7 +287,7 @@ export default function NovelPage() {
       if (config) {
         setPanelStatus("running");
         try {
-          const chunks = roughSplitIntoChunks(saved.script, 3000);
+          const chunks = roughSplitIntoChunks(saved.script, 1000);
           const allPanels: Panel[] = [];
           for (let c = 0; c < chunks.length; c++) {
             try {
@@ -452,7 +452,7 @@ export default function NovelPage() {
         if (config) {
           // ── HYBRID APPROACH ──
           // Step A: Client-side rough split into ~3000 word chunks (FREE)
-          const chunks = roughSplitIntoChunks(finalScript, 3000);
+          const chunks = roughSplitIntoChunks(finalScript, 1000);
           console.log(`Hybrid split: ${totalWords} words → ${chunks.length} chunks (FREE) → AI scene detection`);
 
           // Step B: For each chunk, AI finds natural scene breaks (CHEAP — ~3000 words per call)
