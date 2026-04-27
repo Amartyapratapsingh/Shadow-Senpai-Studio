@@ -1,6 +1,6 @@
 "use client";
 
-import { Settings, Coins, Zap } from "lucide-react";
+import { Settings, Coins, Zap, FileText } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
@@ -88,6 +88,17 @@ export default function Header() {
               <Settings className="w-3.5 h-3.5" />
               <span className="text-[11px] font-medium hidden sm:inline">
                 Settings
+              </span>
+            </Link>
+
+            {/* Logs */}
+            <Link
+              href="/logs"
+              className="glass flex items-center gap-1.5 px-3 py-2 rounded-full text-muted hover:text-foreground transition-all duration-300 hover:bg-white/[0.06]"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span className="text-[11px] font-medium hidden sm:inline">
+                Logs
               </span>
             </Link>
           </div>

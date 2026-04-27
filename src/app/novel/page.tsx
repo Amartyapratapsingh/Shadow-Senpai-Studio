@@ -8,6 +8,7 @@ import { addTextUsage, addTTSUsage, estimateTokens, loadDefaultVoice } from "@/l
 import { getApiKey } from "@/lib/api-keys";
 import { AudioProvider } from "@/lib/audio-utils";
 import { roughSplitIntoChunks, fallbackSplitIntoScenes } from "@/lib/scene-splitter";
+import { logAI, logError, logCost, logInfo } from "@/lib/logger";
 import {
   ArrowLeft, Film, Sparkles, Loader2, AlertCircle, Image as ImageIcon,
   Volume2, FileText, Check, ChevronDown, ChevronUp, Download, Pencil,
@@ -412,7 +413,8 @@ export default function NovelPage() {
               characterRef = data.characters.map((c: { name: string; prompt: string }) => `${c.name}: ${c.prompt}`).join("\n");
               characterRefStore.current = characterRef; // Store persistently
               console.log(`Character sheet: ${data.characters.length} characters identified`);
-              data.characters.forEach((c: { name: string; prompt: string }) => console.log(`  - ${c.name}: ${c.prompt.slice(0, 80)}...`));
+              logAI("character", `${data.characters.length} characters designed`, config.provider, config.model);
+              data.characters.forEach((c: { name: string; prompt: string }) => { console.log(`  - ${c.name}: ${c.prompt.slice(0, 80)}...`); logInfo("character", `${c.name}: ${c.prompt.slice(0, 100)}`); });
             }
           }
         } catch { console.log("Character sheet generation failed — continuing without"); }
@@ -549,10 +551,10 @@ export default function NovelPage() {
       const imgKey = getImageApiKey(selectedImageModel);
       const imgProvider = getImageProvider(selectedImageModel);
 
+      logInfo("system", `Pipeline Step 3+4: ${panelResult.length} panels — image:${selectedImageModel}, audio:${selectedAudioProvider}/${selectedAudioVoice}`);
       console.log(`=== PIPELINE STEP 3+4 ===`);
-      console.log(`Image model: ${selectedImageModel}`);
-      console.log(`Image provider: ${imgProvider}`);
-      console.log(`Audio provider: ${selectedAudioProvider}, voice: ${selectedAudioVoice}`);
+      console.log(`Image model: ${selectedImageModel}, provider: ${imgProvider}`);
+      console.log(`Audio: ${selectedAudioProvider}/${selectedAudioVoice}`);
       console.log(`Audio provider: ${voice.provider}`);
       console.log(`Panels: ${panelResult.length}`);
       console.log(`Character ref: ${characterRef ? "YES (" + characterRef.length + " chars)" : "NONE"}`);
@@ -587,13 +589,18 @@ export default function NovelPage() {
                 panelResult[i] = { ...panelResult[i], audioUrl: URL.createObjectURL(blob), audioStatus: "done" };
                 audioSuccess = true;
                 console.log(`Panel ${i+1} audio OK: ${(blob.size/1024).toFixed(0)}KB`);
+                logAI("audio", `Panel ${i+1} audio OK (${(blob.size/1024).toFixed(0)}KB)`, selectedAudioProvider, selectedAudioVoice);
               }
             } else {
               const e = await res.json().catch(() => ({}));
-              console.error(`Panel ${i+1} audio failed: ${e.error || res.status}`);
+              const errMsg = e.error || `HTTP ${res.status}`;
+              console.error(`Panel ${i+1} audio failed: ${errMsg}`);
+              logError("audio", `Panel ${i+1} audio failed`, errMsg, selectedAudioProvider, selectedAudioVoice);
             }
           } catch (err) {
-            console.error(`Panel ${i+1} audio error:`, err);
+            const errMsg = err instanceof Error ? err.message : "Network error";
+            console.error(`Panel ${i+1} audio error:`, errMsg);
+            logError("audio", `Panel ${i+1} audio error`, errMsg, selectedAudioProvider, selectedAudioVoice);
           }
 
           if (!audioSuccess) panelResult[i] = { ...panelResult[i], audioStatus: "error" };
@@ -633,15 +640,18 @@ export default function NovelPage() {
               const data = await res.json();
               panelResult[i] = { ...panelResult[i], imageUrl: data.imageUrl, imageStatus: "done" };
               console.log(`Panel ${i+1} image OK`);
+              logAI("image", `Panel ${i+1} image OK`, imgProvider, selectedImageModel);
             } else {
               const e = await res.json().catch(() => ({}));
               const errMsg = e.error || `HTTP ${res.status}`;
               console.error(`Panel ${i+1} image FAILED: ${errMsg}`);
+              logError("image", `Panel ${i+1} image failed`, errMsg, imgProvider, selectedImageModel);
               panelResult[i] = { ...panelResult[i], imageStatus: "error", imageError: errMsg };
             }
           } catch (err: unknown) {
             const errMsg = err instanceof Error ? err.message : "Network error";
             console.error(`Panel ${i+1} image ERROR: ${errMsg}`);
+            logError("image", `Panel ${i+1} image error`, errMsg, imgProvider, selectedImageModel);
             panelResult[i] = { ...panelResult[i], imageStatus: "error", imageError: errMsg };
           }
         }
