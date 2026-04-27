@@ -5,11 +5,27 @@ export const maxDuration = 300;
 
 import {
   AudioProvider,
-  TONE_INSTRUCTIONS,
-  detectTone,
   enhanceScript,
   splitTextIntoChunks,
 } from "@/lib/audio-utils";
+
+/**
+ * ONE consistent voice instruction for ALL audio — no per-chunk tone switching.
+ * This keeps pitch, speed, and energy consistent across all panels.
+ */
+const CONSISTENT_VOICE_INSTRUCTION = `You are narrating an anime/manhwa story for a YouTube video.
+
+VOICE RULES (follow these for EVERY line — never change):
+- Speak at a CONSISTENT moderate pace throughout. Not too fast, not too slow.
+- Keep the SAME pitch level throughout. Do not go high-pitched or whisper.
+- Keep the SAME energy level throughout. Steady, confident narration.
+- Natural storytelling voice — like reading a novel aloud to someone.
+- Add subtle emotion through word emphasis, NOT through pitch/speed changes.
+- For dialogue lines, slightly shift tone to show character personality, but keep the same base pitch.
+- Do NOT add long dramatic pauses between sentences.
+- Do NOT stretch out short sentences. Speak them at normal pace.
+- Do NOT whisper or shout. Stay in the middle range.
+- Sound like ONE continuous narration, not separate dramatic readings.`;
 
 // ═══════════════════════════════════════
 //  OpenAI TTS
@@ -26,9 +42,6 @@ async function generateOpenAI(
 
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i];
-    const tone = detectTone(chunk);
-    const chunkInstructions =
-      TONE_INSTRUCTIONS[tone] || TONE_INSTRUCTIONS.hype;
 
     const response = await fetch("https://api.openai.com/v1/audio/speech", {
       method: "POST",
@@ -40,7 +53,7 @@ async function generateOpenAI(
         model: "gpt-4o-mini-tts",
         voice: voice,
         input: chunk,
-        instructions: chunkInstructions,
+        instructions: CONSISTENT_VOICE_INSTRUCTION,
         response_format: "mp3",
       }),
     });
