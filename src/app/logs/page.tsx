@@ -144,18 +144,28 @@ export default function LogsPage() {
                   </div>
                   {/* Details */}
                   {log.details && (
-                    <div className="flex items-center gap-3 mt-1 flex-wrap">
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      {/* Provider + Model */}
                       {log.details.provider && (
-                        <span className="text-[10px] text-muted px-1.5 py-0.5 rounded bg-white/5">{log.details.provider}/{log.details.model}</span>
+                        <span className="text-[10px] font-medium text-blue-400 px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/15">
+                          {log.details.provider} / {log.details.model}
+                        </span>
                       )}
-                      {log.details.inputTokens !== undefined && (
-                        <span className="text-[10px] text-muted">{log.details.inputTokens.toLocaleString()} in → {log.details.outputTokens?.toLocaleString() || 0} out</span>
+                      {/* Tokens */}
+                      {log.details.inputTokens !== undefined && log.details.inputTokens > 0 && (
+                        <span className="text-[10px] text-violet-400 px-2 py-0.5 rounded-md bg-violet-500/10">
+                          {log.details.inputTokens.toLocaleString()} {log.details.outputTokens ? `→ ${log.details.outputTokens.toLocaleString()}` : ""} tokens
+                        </span>
                       )}
+                      {/* Cost */}
                       {log.details.costUSD !== undefined && log.details.costUSD > 0 && (
-                        <span className="text-[10px] text-amber-400 font-medium">{formatCost(log.details.costUSD, currency)}</span>
+                        <span className="text-[10px] font-semibold text-amber-400 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/15">
+                          {formatCost(log.details.costUSD, currency)}
+                        </span>
                       )}
+                      {/* Error */}
                       {log.details.error && (
-                        <span className="text-[10px] text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">{log.details.error}</span>
+                        <span className="text-[10px] text-red-400 px-2 py-0.5 rounded-md bg-red-500/10 border border-red-500/15">{log.details.error}</span>
                       )}
                       {log.details.panelNumber && (
                         <span className="text-[10px] text-muted">Panel #{log.details.panelNumber}</span>

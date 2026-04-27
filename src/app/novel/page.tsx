@@ -589,7 +589,9 @@ export default function NovelPage() {
                 panelResult[i] = { ...panelResult[i], audioUrl: URL.createObjectURL(blob), audioStatus: "done" };
                 audioSuccess = true;
                 console.log(`Panel ${i+1} audio OK: ${(blob.size/1024).toFixed(0)}KB`);
-                logAI("audio", `Panel ${i+1} audio OK (${(blob.size/1024).toFixed(0)}KB)`, selectedAudioProvider, selectedAudioVoice);
+                const panelChars = panelResult[i].narration.length;
+                const ttsCost = (panelChars / 1000000) * 15;
+                logAI("audio", `Panel ${i+1} audio — ${panelResult[i].narration.split(/\s+/).length} words, ${panelChars} chars, ${(blob.size/1024).toFixed(0)}KB`, selectedAudioProvider, `${selectedAudioProvider === "openai" ? "gpt-4o-mini-tts" : "gemini-tts"} / ${selectedAudioVoice}`, panelChars, 0, ttsCost);
               }
             } else {
               const e = await res.json().catch(() => ({}));
@@ -640,7 +642,7 @@ export default function NovelPage() {
               const data = await res.json();
               panelResult[i] = { ...panelResult[i], imageUrl: data.imageUrl, imageStatus: "done" };
               console.log(`Panel ${i+1} image OK`);
-              logAI("image", `Panel ${i+1} image OK`, imgProvider, selectedImageModel);
+              logAI("image", `Panel ${i+1} image generated`, imgProvider, selectedImageModel, 0, 0);
             } else {
               const e = await res.json().catch(() => ({}));
               const errMsg = e.error || `HTTP ${res.status}`;

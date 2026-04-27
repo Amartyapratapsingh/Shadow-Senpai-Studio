@@ -152,7 +152,8 @@ export default function AudioPage() {
       setAudioUrl(URL.createObjectURL(blob));
       setStatus("done");
       addTTSUsage(script.length);
-      logAI("audio", `Audio generated (${(blob.size/1024).toFixed(0)}KB, ${wordCount} words)`, audioProvider, selectedVoice);
+      const ttsCost = (script.length / 1000000) * 15; // $15 per 1M chars
+      logAI("audio", `Audio generated — ${wordCount} words, ${script.length} chars, ${(blob.size/1024).toFixed(0)}KB`, audioProvider, `${audioProvider === "openai" ? "gpt-4o-mini-tts" : "gemini-tts"} / ${selectedVoice}`, script.length, 0, ttsCost);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       setError(msg);

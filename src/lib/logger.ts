@@ -76,9 +76,31 @@ export function clearLogs() {
   if (typeof window !== "undefined") localStorage.removeItem(LOGS_KEY);
 }
 
+/**
+ * Calculate cost from tokens + model using PRICING table.
+ */
+function calcCost(model: string, inputTokens: number, outputTokens: number): number {
+  // Import pricing inline to avoid circular deps
+  const PRICING: Record<string, { input: number; output: number }> = {
+    "gpt-5.4": { input: 2.50, output: 15.00 }, "gpt-5.4-mini": { input: 0.75, output: 4.50 },
+    "gpt-5.2": { input: 1.75, output: 14.00 }, "gpt-5.2-pro": { input: 21.00, output: 168.00 },
+    "gpt-4.1": { input: 2.00, output: 8.00 }, "gpt-4.1-mini": { input: 0.40, output: 1.60 },
+    "gpt-4o": { input: 2.50, output: 10.00 }, "gpt-4o-mini": { input: 0.15, output: 0.60 },
+    "claude-opus-4-6": { input: 5.00, output: 25.00 }, "claude-sonnet-4-6": { input: 3.00, output: 15.00 },
+    "claude-haiku-4-5": { input: 1.00, output: 5.00 }, "claude-sonnet-4-5": { input: 3.00, output: 15.00 },
+    "gemini-2.5-pro": { input: 1.25, output: 10.00 }, "gemini-2.5-flash": { input: 0.30, output: 2.50 },
+    "gemini-2.5-flash-lite": { input: 0.10, output: 0.40 }, "gemini-3-flash-preview": { input: 0.50, output: 3.00 },
+  };
+  const TTS_PER_MILLION_CHARS = 15; // OpenAI TTS
+  if (model.includes("tts")) return (inputTokens / 1000000) * TTS_PER_MILLION_CHARS;
+  const p = PRICING[model] || { input: 2, output: 8 };
+  return (inputTokens / 1000000) * p.input + (outputTokens / 1000000) * p.output;
+}
+
 // Convenience functions
 export function logAI(category: string, message: string, provider: string, model: string, inputTokens?: number, outputTokens?: number, costUSD?: number) {
-  addLog("ai", category, message, { provider, model, inputTokens, outputTokens, costUSD });
+  const cost = costUSD ?? (inputTokens && outputTokens ? calcCost(model, inputTokens, outputTokens) : 0);
+  addLog("ai", category, message, { provider, model, inputTokens, outputTokens, costUSD: cost });
 }
 
 export function logError(category: string, message: string, error?: string, provider?: string, model?: string) {
