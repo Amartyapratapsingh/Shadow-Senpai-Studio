@@ -394,10 +394,44 @@ export default function NovelPage() {
       } catch (err: unknown) { setError(err instanceof Error ? err.message : "Script failed"); setScriptStatus("error"); pipelineRunning.current = false; return; }
     }
 
+    // ── STEP 1.5: TRANSLATE SCRIPT if Hindi is selected ──
+    if (primaryLanguage === "hindi") {
+      const textConfig = getScriptConfig(selectedTextModel);
+      if (textConfig) {
+        console.log("Translating script to Hindi (chunk by chunk)...");
+        const transChunks = roughSplitIntoChunks(finalScript, 1000);
+        const translatedParts: string[] = [];
+
+        for (let tc = 0; tc < transChunks.length; tc++) {
+          try {
+            const translateRes = await fetch("/api/research", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                messages: [
+                  { role: "system", content: "You are a translator. Translate the following text to Hindi. Output ONLY the Hindi translation. Keep character names in English. Keep the same dramatic tone and emotion. Do NOT add labels or notes. Translate EVERY sentence." },
+                  { role: "user", content: transChunks[tc] },
+                ],
+                provider: textConfig.provider, apiKey: textConfig.apiKey, model: textConfig.model,
+              }),
+            });
+            if (translateRes.ok) {
+              const tData = await translateRes.json();
+              translatedParts.push(tData.reply || transChunks[tc]);
+            } else { translatedParts.push(transChunks[tc]); }
+          } catch { translatedParts.push(transChunks[tc]); }
+        }
+
+        finalScript = translatedParts.join("\n\n");
+        setScript(finalScript);
+        console.log(`Script translated to Hindi: ${finalScript.split(/\s+/).length} words`);
+        logAI("script", `Script translated to Hindi (${finalScript.split(/\s+/).length} words, ${transChunks.length} chunks)`, textConfig.provider, textConfig.model);
+      }
+    }
+
     // Save after script
     saveCurrentState(finalScript, "done", "pending", null, "pending", [], "pending", voice);
 
-    // ── STEP 1.5: CHARACTER SHEET — Claude creates fixed designs for every character ──
+    // ── STEP 1.6: CHARACTER SHEET — Claude creates fixed designs for every character ──
     let characterRef = characterRefStore.current || "";
     if (!characterRef) {
       const config = getScriptConfig(selectedTextModel);
