@@ -185,12 +185,13 @@ export default function NovelPage() {
   const [selectedImageModel, setSelectedImageModel] = useState("gpt-image-1.5");
   const [selectedAudioProvider, setSelectedAudioProvider] = useState<"openai" | "gemini">("openai");
   const [selectedAudioVoice, setSelectedAudioVoice] = useState("cedar");
+  const [primaryLanguage, setPrimaryLanguage] = useState<"english" | "hindi">("english");
 
-  // Hindi version
-  const [hindiPanels, setHindiPanels] = useState<Panel[]>([]);
-  const [hindiStatus, setHindiStatus] = useState<"idle" | "running" | "done">("idle");
-  const [hindiProgress, setHindiProgress] = useState(0);
-  const [expandedHindiPanel, setExpandedHindiPanel] = useState<number | null>(null);
+  // Second language version (Hindi if primary is English, English if primary is Hindi)
+  const [secondLangPanels, setSecondLangPanels] = useState<Panel[]>([]);
+  const [secondLangStatus, setSecondLangStatus] = useState<"idle" | "running" | "done">("idle");
+  const [secondLangProgress, setSecondLangProgress] = useState(0);
+  const [expandedSecondPanel, setExpandedSecondPanel] = useState<number | null>(null);
 
   const [phase, setPhase] = useState<"input" | "running" | "paused" | "done">("input");
   const [savedPipelineData, setSavedPipelineData] = useState<SavedPipeline | null>(null);
@@ -818,34 +819,36 @@ export default function NovelPage() {
   }, [panels]);
 
   // ── New project ──
-  const handleNewProject = () => { clearPipeline(); setPhase("input"); setScript(""); setPanels([]); setAudioUrl(null); setScriptStatus("pending"); setAudioStatus("pending"); setPanelStatus("pending"); setImageStatus("pending"); setError(""); setImagesGenerated(0); setHindiPanels([]); setHindiStatus("idle"); setHindiProgress(0); };
+  const handleNewProject = () => { clearPipeline(); setPhase("input"); setScript(""); setPanels([]); setAudioUrl(null); setScriptStatus("pending"); setAudioStatus("pending"); setPanelStatus("pending"); setImageStatus("pending"); setError(""); setImagesGenerated(0); setSecondLangPanels([]); setSecondLangStatus("idle"); setSecondLangProgress(0); };
 
-  // ── Generate Hindi version — translate narration + generate Hindi audio, reuse images ──
-  const generateHindi = useCallback(async () => {
+  // ── Generate second language version — translate + generate audio, reuse images ──
+  const secondLanguage = primaryLanguage === "english" ? "Hindi" : "English";
+
+  const generateSecondLang = useCallback(async () => {
     if (pipelineRunning.current || panels.length === 0) return;
     pipelineRunning.current = true;
-    setHindiStatus("running");
-    setHindiProgress(0);
+    setSecondLangStatus("running");
+    setSecondLangProgress(0);
 
+    const targetLang = primaryLanguage === "english" ? "Hindi" : "English";
     const textConfig = getScriptConfig(selectedTextModel);
-    const voice = getAutoVoice();
-    const audioKey = getApiKey(voice.provider === "gemini" ? "gemini" : "openai");
+    const audioKey = getApiKey(selectedAudioProvider);
 
-    if (!textConfig) { setError("No text AI key for translation"); pipelineRunning.current = false; return; }
+    if (!textConfig) { setError("No AI key for translation"); pipelineRunning.current = false; return; }
 
-    const hindiResults: Panel[] = [];
+    const results: Panel[] = [];
 
     for (let i = 0; i < panels.length; i++) {
       const panel = panels[i];
 
-      // Translate narration to Hindi using AI
-      let hindiNarration = panel.narration;
+      // Translate narration
+      let translatedNarration = panel.narration;
       try {
         const translateRes = await fetch("/api/research", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             messages: [
-              { role: "system", content: "You are a translator. Translate the following text to Hindi. Output ONLY the Hindi translation, nothing else. No labels, no headers. Keep the same dramatic tone and emotion. Keep character names in English." },
+              { role: "system", content: `You are a translator. Translate the following text to ${targetLang}. Output ONLY the ${targetLang} translation, nothing else. No labels, no headers. Keep the same dramatic tone and emotion. Keep character names as-is.` },
               { role: "user", content: panel.narration },
             ],
             provider: textConfig.provider, apiKey: textConfig.apiKey, model: textConfig.model,
@@ -853,44 +856,47 @@ export default function NovelPage() {
         });
         if (translateRes.ok) {
           const tData = await translateRes.json();
-          if (tData.reply) hindiNarration = tData.reply;
+          if (tData.reply) translatedNarration = tData.reply;
         }
       } catch {}
 
-      // Generate Hindi audio
-      let hindiAudioUrl: string | undefined;
-      let hindiAudioStatus: "pending" | "generating" | "done" | "error" = "pending";
+      // Generate audio in target language
+      let translatedAudioUrl: string | undefined;
+      let translatedAudioStatus: "pending" | "generating" | "done" | "error" = "pending";
       if (audioKey) {
         try {
           const audioRes = await fetch("/api/audio", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ script: hindiNarration, voice: voice.voice, provider: voice.provider, apiKey: audioKey }),
+            body: JSON.stringify({ script: translatedNarration, voice: selectedAudioVoice, provider: selectedAudioProvider, apiKey: audioKey }),
           });
           if (audioRes.ok) {
             const blob = await audioRes.blob();
-            if (blob.size > 0) { hindiAudioUrl = URL.createObjectURL(blob); hindiAudioStatus = "done"; }
-            else { hindiAudioStatus = "error"; }
-          } else { hindiAudioStatus = "error"; }
-        } catch { hindiAudioStatus = "error"; }
+            if (blob.size > 0) { translatedAudioUrl = URL.createObjectURL(blob); translatedAudioStatus = "done"; }
+            else { translatedAudioStatus = "error"; }
+          } else { translatedAudioStatus = "error"; }
+        } catch { translatedAudioStatus = "error"; }
       }
 
-      hindiResults.push({
+      results.push({
         panel: i + 1,
-        narration: hindiNarration,
+        narration: translatedNarration,
         imagePrompt: panel.imagePrompt,
-        imageUrl: panel.imageUrl, // Reuse same image!
+        imageUrl: panel.imageUrl,
         imageStatus: panel.imageStatus,
-        audioUrl: hindiAudioUrl,
-        audioStatus: hindiAudioStatus,
+        audioUrl: translatedAudioUrl,
+        audioStatus: translatedAudioStatus,
       });
 
-      setHindiPanels([...hindiResults]);
-      setHindiProgress(i + 1);
+      setSecondLangPanels([...results]);
+      setSecondLangProgress(i + 1);
+
+      // Delay to avoid rate limit
+      if (i < panels.length - 1) await new Promise(r => setTimeout(r, 1000));
     }
 
-    setHindiStatus("done");
+    setSecondLangStatus("done");
     pipelineRunning.current = false;
-  }, [panels, selectedTextModel]);
+  }, [panels, selectedTextModel, primaryLanguage, selectedAudioProvider, selectedAudioVoice]);
 
   const toggleAudio = () => { if (!audioRef.current) return; if (audioPlaying) audioRef.current.pause(); else audioRef.current.play(); setAudioPlaying(!audioPlaying); };
   const downloadAudio = () => { if (!audioUrl) return; const ext = voiceInfo.provider === "gemini" ? "wav" : "mp3"; const a = document.createElement("a"); a.href = audioUrl; a.download = `shadow-senpai-novel-${Date.now()}.${ext}`; a.click(); };
@@ -1029,7 +1035,19 @@ export default function NovelPage() {
                 )}
               </div>
 
-              <div><label className="block text-xs text-muted mb-1.5">Narration Style</label><select value={style} onChange={e => setStyle(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-background border border-card-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-all appearance-none cursor-pointer">{STYLE_OPTIONS.map(opt => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}</select></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="block text-xs text-muted mb-1.5">Narration Style</label><select value={style} onChange={e => setStyle(e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-background border border-card-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-all appearance-none cursor-pointer">{STYLE_OPTIONS.map(opt => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}</select></div>
+                <div><label className="block text-xs text-muted mb-1.5">Create first in</label>
+                  <div className="flex gap-2">
+                    <button onClick={() => setPrimaryLanguage("english")} className={`flex-1 px-3 py-2 rounded-xl text-sm font-medium transition-all ${primaryLanguage === "english" ? "bg-blue-500/15 text-blue-400 border border-blue-500/30" : "bg-background border border-card-border text-muted hover:text-foreground"}`}>
+                      English
+                    </button>
+                    <button onClick={() => setPrimaryLanguage("hindi")} className={`flex-1 px-3 py-2 rounded-xl text-sm font-medium transition-all ${primaryLanguage === "hindi" ? "bg-amber-500/15 text-amber-400 border border-amber-500/30" : "bg-background border border-card-border text-muted hover:text-foreground"}`}>
+                      Hindi
+                    </button>
+                  </div>
+                </div>
+              </div>
               <button onClick={() => setHasScript(!hasScript)} className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-sm font-medium ${hasScript ? "border-rose-500/40 bg-rose-500/5 text-foreground" : "border-dashed border-card-border text-muted hover:text-foreground hover:border-muted"}`}><div className="flex items-center gap-2"><Pencil className="w-4 h-4" /><span>{hasScript ? "I have my own script" : "I have my own script (Optional)"}</span></div>{hasScript ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
               {hasScript && <textarea value={userScript} onChange={e => setUserScript(e.target.value)} placeholder="Paste your novel script here..." rows={10} className="w-full px-4 py-3 rounded-xl bg-background border border-card-border text-foreground text-sm placeholder:text-muted/40 focus:outline-none focus:ring-2 focus:ring-rose-500/50 transition-all resize-y leading-relaxed" />}
             </div>
@@ -1232,72 +1250,73 @@ export default function NovelPage() {
               </div>
             )}
 
-            {/* ═══ HINDI VERSION ═══ */}
-            {panels.some(p => p.imageStatus === "done") && (
-              <div className="rounded-2xl glass-card border border-amber-500/20 p-5">
+            {/* ═══ SECOND LANGUAGE VERSION ═══ */}
+            {panels.some(p => p.imageStatus === "done" || p.audioStatus === "done") && (
+              <div className={`rounded-2xl glass-card border ${primaryLanguage === "english" ? "border-amber-500/20" : "border-blue-500/20"} p-5`}>
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
-                    <span className="text-lg">🇮🇳</span>
-                    <h3 className="text-sm font-semibold text-foreground">Hindi Version</h3>
-                    {hindiStatus === "done" && <span className="text-xs text-success">({hindiPanels.length} panels)</span>}
+                    <span className="text-lg">{primaryLanguage === "english" ? "🇮🇳" : "🇬🇧"}</span>
+                    <h3 className="text-sm font-semibold text-foreground">{secondLanguage} Version</h3>
+                    {secondLangStatus === "done" && <span className="text-xs text-success">({secondLangPanels.length} panels)</span>}
                   </div>
-                  {hindiStatus === "idle" && (
-                    <button onClick={generateHindi} disabled={pipelineRunning.current}
-                      className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:opacity-90 transition-all text-xs font-semibold disabled:opacity-30">
-                      <Volume2 className="w-3.5 h-3.5" /> Generate Hindi Panels + Audio
+                  {secondLangStatus === "idle" && (
+                    <button onClick={generateSecondLang} disabled={pipelineRunning.current}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-white hover:opacity-90 transition-all text-xs font-semibold disabled:opacity-30 ${primaryLanguage === "english" ? "bg-gradient-to-r from-amber-500 to-orange-500" : "bg-gradient-to-r from-blue-500 to-indigo-500"}`}>
+                      <Volume2 className="w-3.5 h-3.5" /> Generate {secondLanguage} Panels + Audio
                     </button>
                   )}
-                  {hindiStatus === "running" && (
-                    <div className="flex items-center gap-2 text-xs text-amber-400">
+                  {secondLangStatus === "running" && (
+                    <div className={`flex items-center gap-2 text-xs ${primaryLanguage === "english" ? "text-amber-400" : "text-blue-400"}`}>
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      Translating... {hindiProgress}/{panels.length}
+                      Translating... {secondLangProgress}/{panels.length}
                     </div>
                   )}
-                  {hindiStatus === "done" && (
+                  {secondLangStatus === "done" && (
                     <button onClick={() => {
-                      hindiPanels.filter(p => p.audioUrl).forEach((p, i) => {
-                        setTimeout(() => { const a = document.createElement("a"); a.href = p.audioUrl!; a.download = `hindi-panel-${p.panel}-audio.mp3`; a.click(); }, i * 300);
+                      secondLangPanels.filter(p => p.audioUrl).forEach((p, i) => {
+                        setTimeout(() => { const a = document.createElement("a"); a.href = p.audioUrl!; a.download = `${secondLanguage.toLowerCase()}-panel-${p.panel}-audio.mp3`; a.click(); }, i * 300);
                       });
-                    }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 text-xs font-medium">
-                      <Download className="w-3.5 h-3.5" /> Download All Hindi Audio
+                    }} className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium ${primaryLanguage === "english" ? "bg-amber-500/15 text-amber-400 hover:bg-amber-500/25" : "bg-blue-500/15 text-blue-400 hover:bg-blue-500/25"}`}>
+                      <Download className="w-3.5 h-3.5" /> Download All {secondLanguage} Audio
                     </button>
                   )}
                 </div>
 
-                {hindiStatus === "running" && (
+                {secondLangStatus === "running" && (
                   <div className="h-2 bg-card-border rounded-full overflow-hidden mb-4">
-                    <div className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all duration-500" style={{ width: `${(hindiProgress / panels.length) * 100}%` }} />
+                    <div className={`h-full rounded-full transition-all duration-500 ${primaryLanguage === "english" ? "bg-gradient-to-r from-amber-500 to-orange-500" : "bg-gradient-to-r from-blue-500 to-indigo-500"}`} style={{ width: `${(secondLangProgress / panels.length) * 100}%` }} />
                   </div>
                 )}
 
-                {hindiPanels.length > 0 && (
+                {secondLangPanels.length > 0 && (
                   <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {hindiPanels.map((hp, idx) => {
-                      const isHExp = expandedHindiPanel === idx;
+                    {secondLangPanels.map((sp, idx) => {
+                      const isSExp = expandedSecondPanel === idx;
+                      const accentColor = primaryLanguage === "english" ? "amber" : "blue";
                       return (
                         <div key={idx} className="rounded-xl border border-card-border bg-card overflow-hidden">
-                          <button onClick={() => setExpandedHindiPanel(isHExp ? null : idx)} className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/5 transition-colors">
+                          <button onClick={() => setExpandedSecondPanel(isSExp ? null : idx)} className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/5 transition-colors">
                             <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">#{hp.panel}</span>
-                              <span className="text-xs text-foreground truncate max-w-sm">{hp.narration.slice(0, 60)}...</span>
+                              <span className={`text-[10px] font-bold text-${accentColor}-400 bg-${accentColor}-500/10 px-1.5 py-0.5 rounded`}>#{sp.panel}</span>
+                              <span className="text-xs text-foreground truncate max-w-sm">{sp.narration.slice(0, 60)}...</span>
                             </div>
                             <div className="flex items-center gap-1.5">
-                              {hp.audioStatus === "done" && <Volume2 className="w-3 h-3 text-amber-400" />}
-                              {hp.imageStatus === "done" && <Check className="w-3 h-3 text-success" />}
-                              {isHExp ? <ChevronUp className="w-3.5 h-3.5 text-muted" /> : <ChevronDown className="w-3.5 h-3.5 text-muted" />}
+                              {sp.audioStatus === "done" && <Volume2 className="w-3 h-3 text-success" />}
+                              {sp.imageStatus === "done" && <Check className="w-3 h-3 text-success" />}
+                              {isSExp ? <ChevronUp className="w-3.5 h-3.5 text-muted" /> : <ChevronDown className="w-3.5 h-3.5 text-muted" />}
                             </div>
                           </button>
-                          {isHExp && (
+                          {isSExp && (
                             <div className="px-4 pb-4 space-y-3">
-                              {hp.imageUrl && <img src={hp.imageUrl} alt="" className="w-full aspect-video object-cover rounded-lg border border-card-border" />}
-                              {hp.audioUrl && (
-                                <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-500/5 border border-amber-500/10">
-                                  <audio src={hp.audioUrl} controls className="flex-1 h-8" style={{ height: "32px" }} />
-                                  <button onClick={() => { const a = document.createElement("a"); a.href = hp.audioUrl!; a.download = `hindi-panel-${idx+1}.mp3`; a.click(); }}
-                                    className="p-1 text-muted/40 hover:text-amber-400"><Download className="w-3 h-3" /></button>
+                              {sp.imageUrl && <img src={sp.imageUrl} alt="" className="w-full aspect-video object-cover rounded-lg border border-card-border" />}
+                              {sp.audioUrl && (
+                                <div className="flex items-center gap-2 p-2 rounded-lg bg-white/[0.03] border border-card-border">
+                                  <audio src={sp.audioUrl} controls className="flex-1 h-8" style={{ height: "32px" }} />
+                                  <button onClick={() => { const a = document.createElement("a"); a.href = sp.audioUrl!; a.download = `${secondLanguage.toLowerCase()}-panel-${idx+1}.mp3`; a.click(); }}
+                                    className="p-1 text-muted/40 hover:text-foreground"><Download className="w-3 h-3" /></button>
                                 </div>
                               )}
-                              <p className="text-xs leading-relaxed text-foreground/80">{hp.narration}</p>
+                              <p className="text-xs leading-relaxed text-foreground/80">{sp.narration}</p>
                             </div>
                           )}
                         </div>
