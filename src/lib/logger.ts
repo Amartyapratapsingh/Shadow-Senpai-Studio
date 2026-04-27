@@ -4,7 +4,8 @@
  */
 
 const LOGS_KEY = "ss_activity_logs";
-const MAX_LOGS = 500; // Keep last 500 entries
+const MAX_LOGS = 2000;
+const MAX_AGE_DAYS = 7; // Logs older than 7 days get auto-deleted
 
 export type LogType = "ai" | "error" | "cost" | "info";
 
@@ -26,10 +27,18 @@ export interface LogEntry {
   };
 }
 
+/**
+ * Remove logs older than 7 days.
+ */
+function cleanOldLogs(logs: LogEntry[]): LogEntry[] {
+  const cutoff = Date.now() - (MAX_AGE_DAYS * 24 * 60 * 60 * 1000);
+  return logs.filter(l => l.timestamp >= cutoff);
+}
+
 export function addLog(type: LogType, category: string, message: string, details?: LogEntry["details"]) {
   if (typeof window === "undefined") return;
   try {
-    const logs = getLogs();
+    let logs = getLogs();
     logs.unshift({
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       type,
@@ -38,7 +47,9 @@ export function addLog(type: LogType, category: string, message: string, details
       message,
       details,
     });
-    // Keep only last MAX_LOGS
+    // Remove logs older than 7 days
+    logs = cleanOldLogs(logs);
+    // Also cap at MAX_LOGS
     if (logs.length > MAX_LOGS) logs.length = MAX_LOGS;
     localStorage.setItem(LOGS_KEY, JSON.stringify(logs));
   } catch {}
@@ -48,7 +59,16 @@ export function getLogs(): LogEntry[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(LOGS_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    let logs: LogEntry[] = JSON.parse(raw);
+    // Clean old logs on every read
+    const before = logs.length;
+    logs = cleanOldLogs(logs);
+    // Save back if any were removed
+    if (logs.length < before) {
+      localStorage.setItem(LOGS_KEY, JSON.stringify(logs));
+    }
+    return logs;
   } catch { return []; }
 }
 
