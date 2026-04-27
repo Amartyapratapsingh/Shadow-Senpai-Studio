@@ -182,6 +182,8 @@ export default function NovelPage() {
   const [customGenreText, setCustomGenreText] = useState("");
   const [selectedTextModel, setSelectedTextModel] = useState("claude-sonnet-4-6");
   const [selectedImageModel, setSelectedImageModel] = useState("gpt-image-1.5");
+  const [selectedAudioProvider, setSelectedAudioProvider] = useState<"openai" | "gemini">("openai");
+  const [selectedAudioVoice, setSelectedAudioVoice] = useState("cedar");
 
   // Hindi version
   const [hindiPanels, setHindiPanels] = useState<Panel[]>([]);
@@ -543,13 +545,14 @@ export default function NovelPage() {
     //  STEP 3+4: PANEL BY PANEL — Audio then Image for each
     // ═══════════════════════════════════════════════════════
     if (panelResult && panelResult.length > 0) {
-      const audioKey = getApiKey(voice.provider === "gemini" ? "gemini" : "openai");
+      const audioKey = getApiKey(selectedAudioProvider);
       const imgKey = getImageApiKey(selectedImageModel);
       const imgProvider = getImageProvider(selectedImageModel);
 
       console.log(`=== PIPELINE STEP 3+4 ===`);
       console.log(`Image model: ${selectedImageModel}`);
       console.log(`Image provider: ${imgProvider}`);
+      console.log(`Audio provider: ${selectedAudioProvider}, voice: ${selectedAudioVoice}`);
       console.log(`Audio provider: ${voice.provider}`);
       console.log(`Panels: ${panelResult.length}`);
       console.log(`Character ref: ${characterRef ? "YES (" + characterRef.length + " chars)" : "NONE"}`);
@@ -570,44 +573,27 @@ export default function NovelPage() {
 
           let audioSuccess = false;
 
-          // Build list of providers to try: primary first, then fallback
-          const audioAttempts: { provider: string; voice: string; apiKey: string }[] = [];
-
-          // Primary: user's selected voice
-          audioAttempts.push({ provider: voice.provider, voice: voice.voice, apiKey: audioKey });
-
-          // Fallback: if primary is Gemini, try OpenAI cedar. If primary is OpenAI, try Gemini Charon.
-          const fallbackOpenAIKey = getApiKey("openai");
-          const fallbackGeminiKey = getApiKey("gemini");
-          if (voice.provider === "gemini" && fallbackOpenAIKey) {
-            audioAttempts.push({ provider: "openai", voice: "cedar", apiKey: fallbackOpenAIKey });
-          } else if (voice.provider === "openai" && fallbackGeminiKey) {
-            audioAttempts.push({ provider: "gemini", voice: "Charon", apiKey: fallbackGeminiKey });
-          }
-
-          for (const attempt of audioAttempts) {
-            if (audioSuccess) break;
-            try {
-              console.log(`Panel ${i+1} audio: trying ${attempt.provider}/${attempt.voice}`);
-              const res = await fetch("/api/audio", {
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ script: panelResult[i].narration, voice: attempt.voice, provider: attempt.provider, apiKey: attempt.apiKey }),
-              });
-              if (res.ok) {
-                const blob = await res.blob();
-                if (blob.size > 0) {
-                  audioBlobsRef.current[i] = blob;
-                  panelResult[i] = { ...panelResult[i], audioUrl: URL.createObjectURL(blob), audioStatus: "done" };
-                  audioSuccess = true;
-                  console.log(`Panel ${i+1} audio OK via ${attempt.provider}: ${(blob.size/1024).toFixed(0)}KB`);
-                }
-              } else {
-                const e = await res.json().catch(() => ({}));
-                console.error(`Panel ${i+1} audio ${attempt.provider} failed: ${e.error || res.status}`);
+          // Use user's selected audio provider and voice
+          try {
+            console.log(`Panel ${i+1} audio: ${selectedAudioProvider}/${selectedAudioVoice}`);
+            const res = await fetch("/api/audio", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ script: panelResult[i].narration, voice: selectedAudioVoice, provider: selectedAudioProvider, apiKey: audioKey }),
+            });
+            if (res.ok) {
+              const blob = await res.blob();
+              if (blob.size > 0) {
+                audioBlobsRef.current[i] = blob;
+                panelResult[i] = { ...panelResult[i], audioUrl: URL.createObjectURL(blob), audioStatus: "done" };
+                audioSuccess = true;
+                console.log(`Panel ${i+1} audio OK: ${(blob.size/1024).toFixed(0)}KB`);
               }
-            } catch (err) {
-              console.error(`Panel ${i+1} audio ${attempt.provider} error:`, err);
+            } else {
+              const e = await res.json().catch(() => ({}));
+              console.error(`Panel ${i+1} audio failed: ${e.error || res.status}`);
             }
+          } catch (err) {
+            console.error(`Panel ${i+1} audio error:`, err);
           }
 
           if (!audioSuccess) panelResult[i] = { ...panelResult[i], audioStatus: "error" };
@@ -975,12 +961,33 @@ export default function NovelPage() {
                     ))}
                   </select>
                 </div>
-                {/* Audio */}
+                {/* Audio Provider */}
                 <div>
-                  <label className="block text-muted mb-1.5">Audio Voice</label>
-                  <div className="px-2.5 py-2 rounded-lg bg-background border border-card-border text-foreground">
-                    {voiceInfo.presetLabel || `${voiceInfo.voice}`}
-                  </div>
+                  <label className="block text-muted mb-1.5">Audio</label>
+                  <select value={selectedAudioProvider} onChange={e => { setSelectedAudioProvider(e.target.value as "openai" | "gemini"); setSelectedAudioVoice(e.target.value === "openai" ? "cedar" : "Charon"); }}
+                    className="w-full px-2.5 py-2 rounded-lg bg-background border border-card-border text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 appearance-none cursor-pointer mb-1.5">
+                    {getApiKey("openai") && <option value="openai">OpenAI TTS</option>}
+                    {getApiKey("gemini") && <option value="gemini">Gemini TTS</option>}
+                  </select>
+                  <select value={selectedAudioVoice} onChange={e => setSelectedAudioVoice(e.target.value)}
+                    className="w-full px-2.5 py-2 rounded-lg bg-background border border-card-border text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 appearance-none cursor-pointer">
+                    {selectedAudioProvider === "openai" && <option value="cedar">Cedar (Deep, warm)</option>}
+                    {selectedAudioProvider === "openai" && <option value="nova">Nova (Female)</option>}
+                    {selectedAudioProvider === "openai" && <option value="onyx">Onyx (Dark, powerful)</option>}
+                    {selectedAudioProvider === "openai" && <option value="ash">Ash (Soft, calm)</option>}
+                    {selectedAudioProvider === "openai" && <option value="ballad">Ballad (Cinematic)</option>}
+                    {selectedAudioProvider === "openai" && <option value="coral">Coral (Warm, friendly)</option>}
+                    {selectedAudioProvider === "openai" && <option value="sage">Sage (Wise)</option>}
+                    {selectedAudioProvider === "openai" && <option value="shimmer">Shimmer (Bright)</option>}
+                    {selectedAudioProvider === "gemini" && <option value="Charon">Charon (Deep)</option>}
+                    {selectedAudioProvider === "gemini" && <option value="Kore">Kore (Clear)</option>}
+                    {selectedAudioProvider === "gemini" && <option value="Fenrir">Fenrir (Powerful)</option>}
+                    {selectedAudioProvider === "gemini" && <option value="Puck">Puck (Playful)</option>}
+                    {selectedAudioProvider === "gemini" && <option value="Aoede">Aoede (Melodic)</option>}
+                    {selectedAudioProvider === "gemini" && <option value="Orus">Orus (Bold)</option>}
+                    {selectedAudioProvider === "gemini" && <option value="Leda">Leda (Gentle)</option>}
+                    {selectedAudioProvider === "gemini" && <option value="Zephyr">Zephyr (Bright)</option>}
+                  </select>
                 </div>
               </div>
               {!anyKey && <Link href="/settings" className="flex items-center gap-1.5 mt-3 text-xs text-amber-400 font-medium hover:underline"><KeyRound className="w-3.5 h-3.5" /> Add API keys in Settings</Link>}
