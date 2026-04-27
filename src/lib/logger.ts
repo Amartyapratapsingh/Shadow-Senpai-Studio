@@ -5,7 +5,7 @@
 
 const LOGS_KEY = "ss_activity_logs";
 const MAX_LOGS = 2000;
-const MAX_AGE_DAYS = 7; // Logs older than 7 days get auto-deleted
+const MAX_AGE_HOURS = 5; // Logs older than 5 hours get auto-deleted
 
 export type LogType = "ai" | "error" | "cost" | "info";
 
@@ -31,7 +31,7 @@ export interface LogEntry {
  * Remove logs older than 7 days.
  */
 function cleanOldLogs(logs: LogEntry[]): LogEntry[] {
-  const cutoff = Date.now() - (MAX_AGE_DAYS * 24 * 60 * 60 * 1000);
+  const cutoff = Date.now() - (MAX_AGE_HOURS * 60 * 60 * 1000);
   return logs.filter(l => l.timestamp >= cutoff);
 }
 
