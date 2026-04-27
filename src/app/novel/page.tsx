@@ -564,30 +564,43 @@ export default function NovelPage() {
       for (let i = 0; i < panelResult.length; i++) {
         console.log(`Panel ${i+1}/${panelResult.length}: ${panelResult[i].narration.split(/\s+/).length} words`);
 
-        // ── 3A: Generate AUDIO for this panel ──
+        // ── 3A: Generate AUDIO for this panel (with retry + delay to avoid rate limit) ──
         if (audioKey && panelResult[i].audioStatus !== "done") {
           setPanels(prev => prev.map((p, idx) => idx === i ? { ...p, audioStatus: "generating" as const } : p));
-          try {
-            const res = await fetch("/api/audio", {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ script: panelResult[i].narration, voice: voice.voice, provider: voice.provider, apiKey: audioKey }),
-            });
-            if (res.ok) {
-              const blob = await res.blob();
-              if (blob.size > 0) {
-                audioBlobsRef.current[i] = blob;
-                const url = URL.createObjectURL(blob);
-                panelResult[i] = { ...panelResult[i], audioUrl: url, audioStatus: "done" };
-                console.log(`Panel ${i+1} audio OK: ${(blob.size/1024).toFixed(0)}KB`);
-              } else {
-                panelResult[i] = { ...panelResult[i], audioStatus: "error" };
+
+          let audioSuccess = false;
+          for (let attempt = 0; attempt < 3 && !audioSuccess; attempt++) {
+            try {
+              if (attempt > 0) {
+                // Wait before retry: 3s, 6s
+                console.log(`Panel ${i+1} audio retry ${attempt+1}/3 — waiting ${attempt * 3}s`);
+                await new Promise(r => setTimeout(r, attempt * 3000));
               }
-            } else {
-              panelResult[i] = { ...panelResult[i], audioStatus: "error" };
+              const res = await fetch("/api/audio", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ script: panelResult[i].narration, voice: voice.voice, provider: voice.provider, apiKey: audioKey }),
+              });
+              if (res.ok) {
+                const blob = await res.blob();
+                if (blob.size > 0) {
+                  audioBlobsRef.current[i] = blob;
+                  const url = URL.createObjectURL(blob);
+                  panelResult[i] = { ...panelResult[i], audioUrl: url, audioStatus: "done" };
+                  audioSuccess = true;
+                  console.log(`Panel ${i+1} audio OK: ${(blob.size/1024).toFixed(0)}KB`);
+                }
+              } else {
+                const e = await res.json().catch(() => ({}));
+                console.error(`Panel ${i+1} audio attempt ${attempt+1} failed: ${e.error || res.status}`);
+              }
+            } catch (err) {
+              console.error(`Panel ${i+1} audio attempt ${attempt+1} error:`, err);
             }
-          } catch {
-            panelResult[i] = { ...panelResult[i], audioStatus: "error" };
           }
+          if (!audioSuccess) panelResult[i] = { ...panelResult[i], audioStatus: "error" };
+
+          // Small delay between panels to avoid rate limit (1.5 seconds)
+          if (i < panelResult.length - 1) await new Promise(r => setTimeout(r, 1500));
         }
 
         // ── 3B: Use Claude/AI to enhance image prompt if it's too basic ──
@@ -700,21 +713,29 @@ export default function NovelPage() {
 
       let newSuccess = 0;
       for (const idx of failedIndices) {
-        console.log(`Retrying chunk ${idx+1}/${chunks.length}: ${chunks[idx].split(/\s+/).length} words`);
-        try {
-          const res = await fetch("/api/audio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script: chunks[idx], voice: voice.voice, provider: voice.provider, apiKey: audioKey }) });
-          if (res.ok) {
-            const blob = await res.blob();
-            if (blob.size > 0) { audioBlobsRef.current[idx] = blob; newSuccess++; console.log(`Chunk ${idx+1} OK: ${(blob.size/1024).toFixed(0)}KB`); }
-          }
-        } catch {}
+        console.log(`Retrying audio ${idx+1}/${chunks.length}: ${chunks[idx].split(/\s+/).length} words`);
 
-        // Merge all available blobs and update player after each retry
+        let success = false;
+        for (let attempt = 0; attempt < 3 && !success; attempt++) {
+          if (attempt > 0) await new Promise(r => setTimeout(r, attempt * 3000));
+          try {
+            const res = await fetch("/api/audio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script: chunks[idx], voice: voice.voice, provider: voice.provider, apiKey: audioKey }) });
+            if (res.ok) {
+              const blob = await res.blob();
+              if (blob.size > 0) { audioBlobsRef.current[idx] = blob; newSuccess++; success = true; console.log(`Audio ${idx+1} OK: ${(blob.size/1024).toFixed(0)}KB`); }
+            }
+          } catch {}
+        }
+
+        // Merge all available blobs and update player after each
         const allBlobs = audioBlobsRef.current.filter((b): b is Blob => b !== null);
         if (allBlobs.length > 0) {
           const merged = new Blob(allBlobs, { type: allBlobs[0].type || "audio/mpeg" });
           setAudioUrl(URL.createObjectURL(merged));
         }
+
+        // Delay between retries to avoid rate limit
+        await new Promise(r => setTimeout(r, 1500));
       }
 
       const totalSuccess = audioBlobsRef.current.filter(b => b !== null).length;
