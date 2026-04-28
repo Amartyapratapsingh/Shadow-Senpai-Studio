@@ -81,19 +81,38 @@ Write the full script now:`;
  * The image must show EXACTLY what's described in THAT panel's narration.
  * NOT a summary. NOT a later moment. THE EXACT moment.
  */
-export function getSmartSceneBreakPrompt(chunk: string, chunkIndex: number, totalChunks: number): string {
+export function getSmartSceneBreakPrompt(chunk: string, chunkIndex: number, totalChunks: number, language?: string): string {
   const wordCount = chunk.trim().split(/\s+/).length;
-  // Let AI decide the count — don't force a number
-  const minScenes = Math.max(5, Math.ceil(wordCount / 100));
-  const maxScenes = Math.ceil(wordCount / 30);
+  const isHindi = language === "hindi";
+
+  // Hindi words are denser (1 Hindi word ≈ 2-3 English words), so need MORE panels per word
+  // English: ~50 words per panel → Hindi: ~25-30 words per panel
+  const minScenes = isHindi
+    ? Math.max(8, Math.ceil(wordCount / 40))   // Hindi: 1 panel per 40 words min
+    : Math.max(5, Math.ceil(wordCount / 70));   // English: 1 panel per 70 words min
+  const maxScenes = isHindi
+    ? Math.ceil(wordCount / 15)                  // Hindi: up to 1 panel per 15 words
+    : Math.ceil(wordCount / 25);                 // English: up to 1 panel per 25 words
+
+  const hindiNote = isHindi ? `
+HINDI TEXT NOTICE: This narration is in Hindi (Devanagari). Hindi words carry MORE meaning per word than English.
+A single Hindi sentence often packs 2-3 visual moments. You MUST split aggressively.
+- Each panel should have only 1-2 Hindi sentences MAX.
+- If a Hindi sentence has more than one action verb, SPLIT it into separate panels.
+- Err on the side of TOO MANY panels rather than too few.` : "";
 
   return `You are an anime CAMERA OPERATOR deciding where to cut between shots.
 
 Each panel = ONE CAMERA SHOT = ONE still image.
 
 Imagine you are filming this as a real anime. Each panel is ONE camera shot — what the camera SEES in that single moment before it cuts to the next shot.
+${hindiNote}
 
 THE GOLDEN RULE: If you cannot show EVERYTHING in the panel's text in ONE single image, the panel is too long. Split it.
+
+CRITICAL: MORE PANELS IS ALWAYS BETTER. Each image must perfectly match its panel text.
+When in doubt, SPLIT INTO MORE PANELS. A panel with 1 sentence is PERFECT.
+A panel with 3+ sentences is TOO LONG — break it up.
 
 EXAMPLE OF CORRECT SPLITTING:
 Script: "Rain was pouring from the sky. He pulled out his gun and aimed. The bullet hit the man and he collapsed to the ground."
@@ -117,8 +136,10 @@ HOW TO DECIDE WHERE TO CUT:
 - If location or time changes → new panel
 - If the emotion/mood shifts → new panel
 - Dialogue can stay with the action it accompanies
+- 1-2 sentences per panel is IDEAL. 3 sentences = probably too many.
 
-AIM for ${minScenes} to ${maxScenes} panels from this chunk. More panels = better image accuracy.
+YOU MUST create at LEAST ${minScenes} panels. Aim for ${minScenes} to ${maxScenes} panels.
+Going ABOVE the max is fine. Going BELOW the min is NOT acceptable.
 
 NARRATION RULES:
 - Copy narration text EXACTLY from the script — word for word, same language
@@ -143,7 +164,7 @@ OUTPUT FORMAT (strict JSON, no markdown, no code blocks):
   }
 ]
 
-SCRIPT (${wordCount} words, ${minScenes}-${maxScenes} panels):
+SCRIPT (${wordCount} words, MINIMUM ${minScenes} panels, aim for ${maxScenes}):
 
 ${chunk}
 

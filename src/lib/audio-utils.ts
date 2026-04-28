@@ -118,11 +118,14 @@ export function detectTone(text: string): string {
 
 export function enhanceScript(script: string): string {
   return script
-    .replace(/ But wait —/g, " — But wait —")
-    .replace(/ Suddenly,/g, " — Suddenly,")
-    .replace(/ However,/g, " — However,")
-    .replace(/ And then —/g, " — And then —")
-    .replace(/ Plot twist:/g, " — Plot twist:")
+    // Remove pause-inducing markers — keep speech flowing continuously
+    .replace(/\s*—\s*/g, ", ")          // Replace em dashes with commas (no pause)
+    .replace(/\.{3,}/g, ".")            // Replace ellipsis (...) with single period
+    .replace(/\[pause\]/gi, "")         // Remove [pause] stage directions
+    .replace(/\[beat\]/gi, "")          // Remove [beat] stage directions
+    .replace(/\[silence\]/gi, "")       // Remove [silence] stage directions
+    .replace(/\s{2,}/g, " ")           // Collapse multiple spaces
+    // Emphasis through capitalization (adds power without pauses)
     .replace(/No one/g, "NO ONE")
     .replace(/out of nowhere/g, "OUT OF NOWHERE")
     .replace(/most powerful/g, "THE MOST POWERFUL")

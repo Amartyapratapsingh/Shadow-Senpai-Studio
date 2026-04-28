@@ -302,15 +302,16 @@ export default function NovelPage() {
           const allPanels: Panel[] = [];
           for (let c = 0; c < chunks.length; c++) {
             try {
-              const res = await fetch("/api/novel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "smart-scene-break", config, script: chunks[c], chunkIndex: c+1, totalChunks: chunks.length }) });
+              const res = await fetch("/api/novel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "smart-scene-break", config, script: chunks[c], chunkIndex: c+1, totalChunks: chunks.length, language: primaryLanguage }) });
               if (res.ok) {
                 const data = await res.json();
                 if (data.scenes) for (const s of data.scenes) { allPanels.push({ panel: allPanels.length+1, narration: s.narration||"", imagePrompt: `Anime art style, 16:9 cinematic widescreen illustration. ${s.imageDescription||""}`, imageStatus: "pending", audioStatus: "pending" }); }
               } else {
-                const fb = fallbackSplitIntoScenes(chunks[c], 70);
+                const fbWPC = primaryLanguage === "hindi" ? 35 : 70;
+                const fb = fallbackSplitIntoScenes(chunks[c], fbWPC);
                 for (const f of fb) allPanels.push({ panel: allPanels.length+1, narration: f.narration, imagePrompt: "Anime art style, 16:9 cinematic widescreen illustration.", imageStatus: "pending", audioStatus: "pending" });
               }
-            } catch { const fb = fallbackSplitIntoScenes(chunks[c], 70); for (const f of fb) allPanels.push({ panel: allPanels.length+1, narration: f.narration, imagePrompt: "Anime art style, 16:9 cinematic widescreen illustration.", imageStatus: "pending", audioStatus: "pending" }); }
+            } catch { const fbWPC = primaryLanguage === "hindi" ? 35 : 70; const fb = fallbackSplitIntoScenes(chunks[c], fbWPC); for (const f of fb) allPanels.push({ panel: allPanels.length+1, narration: f.narration, imagePrompt: "Anime art style, 16:9 cinematic widescreen illustration.", imageStatus: "pending", audioStatus: "pending" }); }
             setPanels([...allPanels]);
           }
           saved.panels = allPanels; saved.panelStatus = "done"; setPanelStatus("done"); savePipeline(saved);
@@ -352,8 +353,8 @@ export default function NovelPage() {
         for (const pp of pendingPanels) {
           setPanels(prev => prev.map((p, i) => i === pp.idx ? { ...p, imageStatus: "generating" as const } : p));
           try {
-            const res = await fetch("/api/novel/image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: pp.imagePrompt, provider: imgProvider, apiKey: imgKey, model: selectedImageModel }) });
-            if (res.ok) { const data = await res.json(); setPanels(prev => { const u = prev.map((p, i) => i === pp.idx ? { ...p, imageUrl: data.imageUrl, imageStatus: "done" as const, imageError: undefined } : p); saved.panels = u; savePipeline(saved); return u; }); }
+            const res = await fetch("/api/novel/image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: pp.imagePrompt, provider: imgProvider, apiKey: imgKey, model: selectedImageModel, geminiKey: getApiKey("gemini") || undefined, openaiKey: getApiKey("openai") || undefined }) });
+            if (res.ok) { const data = await res.json(); if (data.wasFallback) console.log(`Resume panel image OK (fallback → ${data.usedProvider}/${data.usedModel})`); setPanels(prev => { const u = prev.map((p, i) => i === pp.idx ? { ...p, imageUrl: data.imageUrl, imageStatus: "done" as const, imageError: undefined } : p); saved.panels = u; savePipeline(saved); return u; }); }
             else { const e = await res.json().catch(() => ({})); setPanels(prev => { const u = prev.map((p, i) => i === pp.idx ? { ...p, imageStatus: "error" as const, imageError: e.error || "Failed" } : p); saved.panels = u; savePipeline(saved); return u; }); }
           } catch (err: unknown) { const msg = err instanceof Error ? err.message : "Failed"; setPanels(prev => { const u = prev.map((p, i) => i === pp.idx ? { ...p, imageStatus: "error" as const, imageError: msg } : p); saved.panels = u; savePipeline(saved); return u; }); }
           setImagesGenerated(prev => prev + 1);
@@ -418,7 +419,7 @@ export default function NovelPage() {
               method: "POST", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 messages: [
-                  { role: "system", content: "You are a translator. Translate the following text to Hindi. Output ONLY the Hindi translation. Keep character names in English. Keep the same dramatic tone and emotion. Do NOT add labels or notes. Translate EVERY sentence." },
+                  { role: "system", content: "You are a translator. Translate the following text to simple, everyday spoken Hindi (the kind people use in normal conversation). Output ONLY the Hindi translation.\n\nHINDI STYLE RULES:\n- Use SIMPLE conversational Hindi that everyone understands. Like how friends talk to each other.\n- Do NOT use Shudh Hindi, Sanskrit-heavy words, or complex literary Hindi.\n- Use common Hinglish words where natural (e.g., 'power' instead of 'shakti', 'attack' instead of 'aakraman', 'fight' instead of 'yuddh', 'dangerous' instead of 'bhayanak').\n- Keep character names, place names, and technique names in English/original language.\n- Keep the same dramatic tone and emotion.\n- Do NOT add labels, notes, or explanations.\n- Translate EVERY sentence. Do not skip anything.\n- Write Hindi in Devanagari script.\n- Avoid rare/old Hindi words. If a simpler word exists, use it.\n- Do NOT add any ellipsis (...), dashes (—), or [pause] markers. Write clean flowing sentences.\n- Do NOT add dramatic pauses or stage directions in the translation." },
                   { role: "user", content: transChunks[tc] },
                 ],
                 provider: textConfig.provider, apiKey: textConfig.apiKey, model: textConfig.model,
@@ -529,6 +530,7 @@ export default function NovelPage() {
                   action: "smart-scene-break", config,
                   script: chunks[c],
                   chunkIndex: c + 1, totalChunks: chunks.length,
+                  language: primaryLanguage,
                 }),
               });
 
@@ -549,7 +551,8 @@ export default function NovelPage() {
               } else {
                 // If AI fails for this chunk, use client-side fallback for just this chunk
                 console.warn(`AI failed for chunk ${c + 1}, using fallback`);
-                const fallbackScenes = fallbackSplitIntoScenes(chunks[c], 70);
+                const fallbackWPC = primaryLanguage === "hindi" ? 35 : 70; // Hindi needs tighter panels
+                const fallbackScenes = fallbackSplitIntoScenes(chunks[c], fallbackWPC);
                 for (const fs of fallbackScenes) {
                   allPanels.push({
                     panel: allPanels.length + 1,
@@ -562,7 +565,8 @@ export default function NovelPage() {
               }
             } catch {
               // Fallback for this chunk
-              const fallbackScenes = fallbackSplitIntoScenes(chunks[c], 70);
+              const fallbackWPC = primaryLanguage === "hindi" ? 35 : 70;
+              const fallbackScenes = fallbackSplitIntoScenes(chunks[c], fallbackWPC);
               for (const fs of fallbackScenes) {
                 allPanels.push({
                   panel: allPanels.length + 1,
@@ -576,8 +580,9 @@ export default function NovelPage() {
           }
         } else {
           // No AI key — pure client-side fallback (FREE but dumber scene breaks)
-          console.log(`No AI key — pure client-side split (${totalWords} words)`);
-          const fallbackScenes = fallbackSplitIntoScenes(finalScript, 70);
+          const fallbackWPC = primaryLanguage === "hindi" ? 35 : 70;
+          console.log(`No AI key — pure client-side split (${totalWords} words, ${fallbackWPC} wpc)`);
+          const fallbackScenes = fallbackSplitIntoScenes(finalScript, fallbackWPC);
           for (const fs of fallbackScenes) {
             allPanels.push({
               panel: allPanels.length + 1,
@@ -700,13 +705,19 @@ export default function NovelPage() {
           try {
             const res = await fetch("/api/novel/image", {
               method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ prompt: finalImagePrompt, provider: imgProvider, apiKey: imgKey, model: selectedImageModel }),
+              body: JSON.stringify({
+                prompt: finalImagePrompt, provider: imgProvider, apiKey: imgKey, model: selectedImageModel,
+                geminiKey: getApiKey("gemini") || undefined, openaiKey: getApiKey("openai") || undefined,
+              }),
             });
             if (res.ok) {
               const data = await res.json();
+              const usedModel = data.usedModel || selectedImageModel;
+              const usedProvider = data.usedProvider || imgProvider;
               panelResult[i] = { ...panelResult[i], imageUrl: data.imageUrl, imageStatus: "done" };
-              console.log(`Panel ${i+1} image OK`);
-              logAI("image", `Panel ${i+1} image generated`, imgProvider, selectedImageModel, 0, 0);
+              if (data.wasFallback) console.log(`Panel ${i+1} image OK (fallback: ${usedProvider}/${usedModel})`);
+              else console.log(`Panel ${i+1} image OK`);
+              logAI("image", `Panel ${i+1} image generated${data.wasFallback ? ` (fallback → ${usedModel})` : ""}`, usedProvider, usedModel, 0, 0);
             } else {
               const e = await res.json().catch(() => ({}));
               const errMsg = e.error || `HTTP ${res.status}`;
@@ -862,9 +873,13 @@ export default function NovelPage() {
       }
 
       try {
-        const res = await fetch("/api/novel/image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: finalPrompt, provider: imgProvider, apiKey: imgKey, model: selectedImageModel }) });
+        const res = await fetch("/api/novel/image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+          prompt: finalPrompt, provider: imgProvider, apiKey: imgKey, model: selectedImageModel,
+          geminiKey: getApiKey("gemini") || undefined, openaiKey: getApiKey("openai") || undefined,
+        }) });
         if (res.ok) {
           const data = await res.json();
+          if (data.wasFallback) console.log(`Retry panel ${pp.panel} OK (fallback → ${data.usedProvider}/${data.usedModel})`);
           setPanels(prev => { const u = prev.map((p, i) => i === pp.idx ? { ...p, imageUrl: data.imageUrl, imageStatus: "done" as const, imageError: undefined } : p); const saved = loadPipeline(); if (saved) { saved.panels = u; savePipeline(saved); } return u; });
         } else {
           const e = await res.json().catch(() => ({}));

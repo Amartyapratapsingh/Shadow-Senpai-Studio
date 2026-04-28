@@ -22,10 +22,19 @@ VOICE RULES (follow these for EVERY line — never change):
 - Natural storytelling voice — like reading a novel aloud to someone.
 - Add subtle emotion through word emphasis, NOT through pitch/speed changes.
 - For dialogue lines, slightly shift tone to show character personality, but keep the same base pitch.
-- Do NOT add long dramatic pauses between sentences.
-- Do NOT stretch out short sentences. Speak them at normal pace.
 - Do NOT whisper or shout. Stay in the middle range.
-- Sound like ONE continuous narration, not separate dramatic readings.`;
+- Sound like ONE continuous narration, not separate dramatic readings.
+
+PACING & PAUSES (CRITICAL — follow strictly):
+- Do NOT add any dramatic pauses between sentences. Flow continuously.
+- Maximum gap between any two sentences is 1 second. NEVER pause longer than 2 seconds.
+- Do NOT add silence or breathing gaps between paragraphs.
+- Treat ellipsis (...) as a TINY 0.5 second pause, not a long dramatic silence.
+- Treat em dashes (—) as immediate continuation, no pause at all.
+- Read commas with natural micro-pauses only (under 0.3 seconds).
+- The entire narration should sound like ONE continuous flowing stream of speech.
+- NEVER slow down at the end of sentences. Maintain the same pace throughout.
+- Skip over any stage directions like [pause], [beat], [silence] — do NOT pause for them.`;
 
 // ═══════════════════════════════════════
 //  OpenAI TTS

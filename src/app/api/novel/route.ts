@@ -94,11 +94,12 @@ export async function POST(request: NextRequest) {
       if (!script?.trim()) return NextResponse.json({ error: "Script chunk required" }, { status: 400 });
       const chunkIndex = body.chunkIndex || 1;
       const totalChunks = body.totalChunks || 1;
-      const prompt = getSmartSceneBreakPrompt(script, chunkIndex, totalChunks);
+      const language = body.language || "english";
+      const prompt = getSmartSceneBreakPrompt(script, chunkIndex, totalChunks, language);
 
       let result: string;
       try {
-        result = await callAI(config, prompt, 8192);
+        result = await callAI(config, prompt, 16384);
       } catch (err: unknown) {
         return NextResponse.json({ error: `AI scene break failed: ${err instanceof Error ? err.message : "Unknown"}` }, { status: 500 });
       }
