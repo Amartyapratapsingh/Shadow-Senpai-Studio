@@ -441,12 +441,29 @@ export default function NovelPage() {
     // Save after script
     saveCurrentState(finalScript, "done", "pending", null, "pending", [], "pending", voice);
 
-    // ── STEP 1.6: CHARACTER SHEET — Claude creates fixed designs for every character ──
+    // ── STEP 1.6: CHARACTER SHEET — persistent per novel name ──
+    // Check localStorage first — if same novel name, reuse the saved character designs
+    const charSheetKey = `ss_characters_${novelName.trim().toLowerCase().replace(/\s+/g, "_")}`;
     let characterRef = characterRefStore.current || "";
+
+    // Try loading from localStorage (same novel = same characters across chapters)
+    if (!characterRef && novelName.trim()) {
+      try {
+        const saved = localStorage.getItem(charSheetKey);
+        if (saved) {
+          characterRef = saved;
+          characterRefStore.current = characterRef;
+          console.log(`Character sheet loaded from storage for "${novelName}"`);
+          logInfo("character", `Loaded saved character designs for "${novelName}"`);
+        }
+      } catch {}
+    }
+
+    // If still no character ref, generate new one
     if (!characterRef) {
       const config = getScriptConfig(selectedTextModel);
       if (config) {
-        console.log("Generating character sheet...");
+        console.log("Generating new character sheet...");
         try {
           const res = await fetch("/api/novel", {
             method: "POST", headers: { "Content-Type": "application/json" },
@@ -456,9 +473,11 @@ export default function NovelPage() {
             const data = await res.json();
             if (data.characters && Array.isArray(data.characters)) {
               characterRef = data.characters.map((c: { name: string; prompt: string }) => `${c.name}: ${c.prompt}`).join("\n");
-              characterRefStore.current = characterRef; // Store persistently
-              console.log(`Character sheet: ${data.characters.length} characters identified`);
-              logAI("character", `${data.characters.length} characters designed`, config.provider, config.model);
+              characterRefStore.current = characterRef;
+              // Save to localStorage keyed by novel name — persists across chapters
+              try { localStorage.setItem(charSheetKey, characterRef); } catch {}
+              console.log(`Character sheet: ${data.characters.length} characters — saved for "${novelName}"`);
+              logAI("character", `${data.characters.length} characters designed & saved for "${novelName}"`, config.provider, config.model);
               data.characters.forEach((c: { name: string; prompt: string }) => { console.log(`  - ${c.name}: ${c.prompt.slice(0, 80)}...`); logInfo("character", `${c.name}: ${c.prompt.slice(0, 100)}`); });
             }
           }
