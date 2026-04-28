@@ -233,10 +233,20 @@ export default function NovelPage() {
       setScriptStatus(saved.scriptStatus);
       setAudioStatus(saved.audioStatus);
       setPanelStatus(saved.panelStatus);
-      setPanels(saved.panels);
+      // Restore panels — mark "done" ones without data as "pending" so they get regenerated
+      const restoredPanels = saved.panels.map(p => ({
+        ...p,
+        // If audio was "done" but URL is lost (page reload), mark as pending for regeneration
+        audioStatus: (p.audioStatus === "done" && !p.audioUrl) ? "pending" as const : p.audioStatus,
+        // If image was "done" but URL is lost (page reload), mark as pending for regeneration
+        imageStatus: (p.imageStatus === "done" && !p.imageUrl) ? "pending" as const : p.imageStatus,
+        audioUrl: undefined, // Blob URLs don't survive page reload
+        imageUrl: undefined, // Blob URLs don't survive page reload
+      }));
+      setPanels(restoredPanels);
       setImageStatus(saved.imageStatus);
       setVoiceInfo(saved.voiceInfo);
-      setImagesGenerated(saved.panels.filter(p => p.imageStatus === "done" || p.imageStatus === "error").length);
+      setImagesGenerated(restoredPanels.filter(p => p.imageStatus === "done" || p.imageStatus === "error").length);
 
       // Audio is NOT stored in localStorage (too large — crashes browser)
       // User can click "Retry Audio" to regenerate it
