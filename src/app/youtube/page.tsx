@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Header from "@/components/Header";
 import { STYLE_OPTIONS } from "@/lib/prompts";
 import { NOVEL_GENRES, NovelGenre } from "@/lib/novel-genres";
-import { addTextUsage, addTTSUsage, addImageUsage, estimateTokens, loadDefaultVoice } from "@/lib/usage";
+import { addTextUsage, addTTSUsage, estimateTokens, loadDefaultVoice } from "@/lib/usage";
 import { getApiKey } from "@/lib/api-keys";
 import { AudioProvider } from "@/lib/audio-utils";
 import { roughSplitIntoChunks, fallbackSplitIntoScenes } from "@/lib/scene-splitter";
@@ -34,7 +34,7 @@ interface VoicePreset { label: string; provider: AudioProvider; voice: string; }
 type StepStatus = "pending" | "running" | "done" | "error";
 
 // ── Pipeline state saved to localStorage ──
-const PIPELINE_KEY = "ss_novel_pipeline";
+const PIPELINE_KEY = "ss_youtube_pipeline";
 
 interface SavedPipeline {
   novelName: string;
@@ -216,10 +216,10 @@ function isAudioRateLimitError(errorMsg: string): boolean {
 // blobToBase64 removed — storing audio/images in localStorage crashes the browser
 
 // ══════════════════════════════════
-export default function NovelPage() {
+export default function YouTubePage() {
   const [novelName, setNovelName] = useState("");
   const [userScript, setUserScript] = useState("");
-  const [hasScript, setHasScript] = useState(false);
+  const [hasScript, setHasScript] = useState(true);
   const [style, setStyle] = useState("engaging-and-dramatic");
   const [selectedGenre, setSelectedGenre] = useState<NovelGenre>(NOVEL_GENRES[0]);
   const [customGenreText, setCustomGenreText] = useState("");
@@ -452,23 +452,63 @@ export default function NovelPage() {
     setVoiceInfo(voice);
     let finalScript = "";
 
-    // ── 1. SCRIPT ──
-    if (hasScript && userScript.trim()) {
-      finalScript = userScript;
+    // ── 1. SCRIPT — Viral YouTube Rewrite ──
+    if (!userScript.trim()) {
+      setError("Please paste your raw novel chapters.");
+      setScriptStatus("error");
+      pipelineRunning.current = false;
+      return;
+    }
+
+    // Rewrite raw novel chapters into viral YouTube narration
+    const textConfig = getScriptConfig(selectedTextModel);
+    if (!textConfig) {
+      setError("No AI API key. Add in Settings.");
+      setScriptStatus("error");
+      pipelineRunning.current = false;
+      return;
+    }
+
+    try {
+      const rawChunks = roughSplitIntoChunks(userScript, 1500);
+      const rewrittenParts: string[] = [];
+      logInfo("script", `Viral rewrite starting: ${rawChunks.length} chunks from ${userScript.split(/\s+/).length} words`);
+
+      for (let rc = 0; rc < rawChunks.length; rc++) {
+        try {
+          const rwRes = await fetch("/api/novel", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "viral-rewrite",
+              config: textConfig,
+              script: rawChunks[rc],
+              language: primaryLanguage,
+            }),
+          });
+          if (rwRes.ok) {
+            const rwData = await rwRes.json();
+            rewrittenParts.push(rwData.rewrittenScript || rawChunks[rc]);
+            logAI("script", `Chunk ${rc+1}/${rawChunks.length} rewritten to viral format`, textConfig.provider, textConfig.model);
+          } else {
+            rewrittenParts.push(rawChunks[rc]);
+            logError("script", `Chunk ${rc+1} rewrite failed, using original`, "API error");
+          }
+        } catch {
+          rewrittenParts.push(rawChunks[rc]);
+          logError("script", `Chunk ${rc+1} rewrite error, using original`, "Network error");
+        }
+      }
+
+      finalScript = rewrittenParts.join("\n\n");
       setScript(finalScript);
       setScriptStatus("done");
-    } else {
-      const config = getScriptConfig(selectedTextModel);
-      if (!config) { setError("No API key. Add in Settings."); setScriptStatus("error"); pipelineRunning.current = false; return; }
-      try {
-        const res = await fetch("/api/novel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "generate-script", config, novelName, style, genreHint: selectedGenre.id === "custom" ? customGenreText : selectedGenre.promptHint }) });
-        if (!res.ok) { const e = await res.json(); throw new Error(e.error || "Script failed"); }
-        const data = await res.json();
-        finalScript = data.script;
-        setScript(finalScript);
-        setScriptStatus("done");
-        addTextUsage(config.model, estimateTokens(novelName + style), estimateTokens(finalScript));
-      } catch (err: unknown) { setError(err instanceof Error ? err.message : "Script failed"); setScriptStatus("error"); pipelineRunning.current = false; return; }
+      addTextUsage(textConfig.model, estimateTokens(userScript), estimateTokens(finalScript));
+      logAI("script", `Viral rewrite complete: ${userScript.split(/\s+/).length} → ${finalScript.split(/\s+/).length} words`, textConfig.provider, textConfig.model);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Viral rewrite failed");
+      setScriptStatus("error");
+      pipelineRunning.current = false;
+      return;
     }
 
     // ── STEP 1.5: TRANSLATE SCRIPT if Hindi is selected ──
@@ -738,7 +778,6 @@ export default function NovelPage() {
                 console.error(`Panel ${i+1} audio failed (${tryProvider}/${tryVoice}): ${errMsg}`);
                 // If rate limit, try next in chain
                 if (isAudioRateLimitError(errMsg) && ac < audioChain.length - 1) {
-                  addCooldown(tryProvider === "openai" ? "gpt-4o-mini-tts" : "gemini-2.5-flash-preview-tts", tryProvider, "audio", errMsg);
                   logError("audio", `Panel ${i+1} audio rate limited on ${tryVoice}, trying fallback...`, errMsg, tryProvider, tryVoice);
                   continue;
                 }
@@ -747,7 +786,7 @@ export default function NovelPage() {
             } catch (err) {
               const errMsg = err instanceof Error ? err.message : "Network error";
               console.error(`Panel ${i+1} audio error (${tryProvider}/${tryVoice}):`, errMsg);
-              if (isAudioRateLimitError(errMsg) && ac < audioChain.length - 1) { addCooldown(tryProvider === "openai" ? "gpt-4o-mini-tts" : "gemini-2.5-flash-preview-tts", tryProvider, "audio", errMsg); continue; }
+              if (isAudioRateLimitError(errMsg) && ac < audioChain.length - 1) continue;
               logError("audio", `Panel ${i+1} audio error`, errMsg, tryProvider, tryVoice);
             }
           }
@@ -806,20 +845,17 @@ export default function NovelPage() {
               panelResult[i] = { ...panelResult[i], imageUrl: data.imageUrl, imageStatus: "done" };
               if (data.wasFallback) console.log(`Panel ${i+1} image OK (fallback: ${usedProvider}/${usedModel})`);
               else console.log(`Panel ${i+1} image OK`);
-              addImageUsage(usedModel);
-              logAI("image", `Panel ${i+1} image generated${data.wasFallback ? ` (fallback → ${usedModel})` : ""}`, usedProvider, usedModel, 0, 0, undefined);
+              logAI("image", `Panel ${i+1} image generated${data.wasFallback ? ` (fallback → ${usedModel})` : ""}`, usedProvider, usedModel, 0, 0);
             } else {
               const e = await res.json().catch(() => ({}));
               const errMsg = e.error || `HTTP ${res.status}`;
               console.error(`Panel ${i+1} image FAILED: ${errMsg}`);
-              if (isAudioRateLimitError(errMsg)) addCooldown(selectedImageModel, imgProvider, "image", errMsg);
               logError("image", `Panel ${i+1} image failed`, errMsg, imgProvider, selectedImageModel);
               panelResult[i] = { ...panelResult[i], imageStatus: "error", imageError: errMsg };
             }
           } catch (err: unknown) {
             const errMsg = err instanceof Error ? err.message : "Network error";
             console.error(`Panel ${i+1} image ERROR: ${errMsg}`);
-            if (isAudioRateLimitError(errMsg)) addCooldown(selectedImageModel, imgProvider, "image", errMsg);
             logError("image", `Panel ${i+1} image error`, errMsg, imgProvider, selectedImageModel);
             panelResult[i] = { ...panelResult[i], imageStatus: "error", imageError: errMsg };
           }
@@ -1028,7 +1064,6 @@ export default function NovelPage() {
           const data = await res.json();
           const usedModel = data.usedModel || selectedImageModel;
           const usedProvider = data.usedProvider || imgProvider;
-          addImageUsage(usedModel);
           logAI("image", `Retry panel ${pp.panel} image OK${data.wasFallback ? ` (fallback → ${usedModel})` : ""}`, usedProvider, usedModel, 0, 0);
           setPanels(prev => { const u = prev.map((p, i) => i === pp.idx ? { ...p, imageUrl: data.imageUrl, imageStatus: "done" as const, imageError: undefined } : p); const saved = loadPipeline(); if (saved) { saved.panels = u; savePipeline(saved); } return u; });
         } else {
@@ -1180,7 +1215,7 @@ export default function NovelPage() {
   };
 
   const anyKey = hasKeys.openai || hasKeys.anthropic || hasKeys.gemini;
-  const canStart = anyKey && ((hasScript && userScript.trim().length > 0) || (!hasScript && novelName.trim().length > 0));
+  const canStart = anyKey && userScript.trim().length > 0 && novelName.trim().length > 0;
   const totalPanels = panels.length;
   const successImages = panels.filter(p => p.imageStatus === "done").length;
   const erroredImages = panels.filter(p => p.imageStatus === "error").length;
@@ -1211,9 +1246,9 @@ export default function NovelPage() {
           <div>
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-red-600 flex items-center justify-center"><Film className="w-5 h-5 text-white" /></div>
-              Novel Video Creator
+              YouTube Video Creator
             </h1>
-            <p className="text-sm text-muted mt-2">Enter a name, hit start — script, audio, and images all generate automatically.</p>
+            <p className="text-sm text-muted mt-2">Paste raw novel chapters — they get rewritten into viral YouTube narration with audio and images.</p>
           </div>
           {phase !== "input" && (
             <button onClick={handleNewProject} className="text-xs text-muted hover:text-foreground border border-card-border px-3 py-1.5 rounded-lg hover:border-muted transition-all">New Project</button>
@@ -1601,9 +1636,9 @@ export default function NovelPage() {
         )}
 
         {error && <div className="mt-6 p-4 rounded-xl bg-danger/10 border border-danger/20 flex items-start gap-3"><AlertCircle className="w-5 h-5 text-danger shrink-0 mt-0.5" /><div><p className="text-sm font-medium text-danger">Error</p><p className="text-sm text-danger/80 mt-1">{error}</p></div></div>}
-        {phase === "input" && !error && <div className="text-center py-6"><p className="text-xs text-muted max-w-md mx-auto">One click — everything auto-generates. If you leave and come back, it resumes where it left off.</p></div>}
+        {phase === "input" && !error && <div className="text-center py-6"><p className="text-xs text-muted max-w-md mx-auto">Paste your raw novel chapters, hit start — viral rewrite, audio, and images all generate automatically.</p></div>}
       </main>
-      <footer className="py-6 text-center"><p className="text-xs text-muted">MAVORI Studio — Novel Video Creator.</p></footer>
+      <footer className="py-6 text-center"><p className="text-xs text-muted">MAVORI Studio — YouTube Video Creator.</p></footer>
     </div>
   );
 }

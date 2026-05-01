@@ -241,7 +241,7 @@ export async function POST(request: NextRequest) {
         status: 200,
         headers: {
           "Content-Type": "audio/wav",
-          "Content-Disposition": `attachment; filename="shadow-senpai-audio.wav"`,
+          "Content-Disposition": `attachment; filename="mavori-audio.wav"`,
           "Content-Length": audioData.length.toString(),
         },
       });
@@ -251,7 +251,7 @@ export async function POST(request: NextRequest) {
         status: 200,
         headers: {
           "Content-Type": "audio/mpeg",
-          "Content-Disposition": `attachment; filename="shadow-senpai-audio.mp3"`,
+          "Content-Disposition": `attachment; filename="mavori-audio.mp3"`,
           "Content-Length": audioData.length.toString(),
         },
       });

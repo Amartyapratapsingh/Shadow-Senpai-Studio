@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AIConfig } from "@/lib/types";
-import { getNovelScriptPrompt, getSmartSceneBreakPrompt, getImagePromptForScene, getCharacterSheetPrompt } from "@/lib/novel-prompts";
+import { getNovelScriptPrompt, getSmartSceneBreakPrompt, getImagePromptForScene, getCharacterSheetPrompt, getViralRewritePrompt } from "@/lib/novel-prompts";
 
 export const maxDuration = 300;
 
@@ -121,8 +121,32 @@ export async function POST(request: NextRequest) {
     if (action === "image-prompt") {
       if (!narration?.trim()) return NextResponse.json({ error: "Narration required" }, { status: 400 });
       const prompt = getImagePromptForScene(narration, sceneNumber || 1, totalScenes || 1, characterRef);
-      const result = await callAI(config, prompt, 512);
-      return NextResponse.json({ imagePrompt: result.trim() });
+      const result = await callAI(config, prompt, 1024);
+
+      // Try to parse as JSON (new format with newCharacters)
+      try {
+        const cleaned = result.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+        const parsed = JSON.parse(cleaned);
+        if (parsed.imagePrompt) {
+          return NextResponse.json({
+            imagePrompt: parsed.imagePrompt.trim(),
+            newCharacters: parsed.newCharacters?.trim() || "",
+          });
+        }
+      } catch {
+        // Fallback: treat entire result as the image prompt (old format)
+      }
+
+      return NextResponse.json({ imagePrompt: result.trim(), newCharacters: "" });
+    }
+
+    // ── Action 4: Viral YouTube rewrite — transforms raw novel into fast-paced narration ──
+    if (action === "viral-rewrite") {
+      if (!script?.trim()) return NextResponse.json({ error: "Raw chapter text required" }, { status: 400 });
+      const language = body.language || "hindi";
+      const prompt = getViralRewritePrompt(script, language);
+      const result = await callAI(config, prompt, 16384);
+      return NextResponse.json({ rewrittenScript: result.trim() });
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });

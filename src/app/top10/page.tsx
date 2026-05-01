@@ -508,7 +508,7 @@ export default function Top10Page() {
 
       <footer className="py-6 text-center">
         <p className="text-xs text-muted">
-          Shadow Senpai Studio — Your scripts stay private.
+          MAVORI Studio — Your scripts stay private.
         </p>
       </footer>
     </div>

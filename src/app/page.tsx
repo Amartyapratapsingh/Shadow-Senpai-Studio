@@ -4,14 +4,14 @@ import Header from "@/components/Header";
 import FallingThumbnails from "@/components/FallingThumbnails";
 import Link from "next/link";
 import Image from "next/image";
-import { Wand2, ListOrdered, Volume2, Film, Search, ArrowUpRight, ArrowRight } from "lucide-react";
+import { Wand2, ListOrdered, Volume2, Film, Search, ArrowUpRight, ArrowRight, Play } from "lucide-react";
 // ArrowRight used for research bar, ArrowUpRight for tool cards
 
 const TOOLS = [
   {
-    title: "Script Rewriter",
-    subtitle: "Manhwa & Manga",
-    description: "Rewrite any transcript into original content. Every page covered, nothing skipped.",
+    title: "Panel Script Writer",
+    subtitle: "Image to Script",
+    description: "Upload manhwa panels — AI reads each image, writes narration, generates audio per panel.",
     href: "/rewriter",
     icon: Wand2,
     gradient: "from-violet-500 to-indigo-600",
@@ -52,6 +52,17 @@ const TOOLS = [
     borderHover: "hover:border-orange-500/30",
     accentColor: "text-orange-400",
   },
+  {
+    title: "YouTube Creator",
+    subtitle: "Viral Script Engine",
+    description: "Paste raw novel chapters → AI rewrites into viral fast-paced YouTube narration with audio & images.",
+    href: "/youtube",
+    icon: Play,
+    gradient: "from-red-500 to-red-700",
+    glowColor: "rgba(239, 68, 68, 0.25)",
+    borderHover: "hover:border-red-500/30",
+    accentColor: "text-red-400",
+  },
 ];
 
 export default function Home() {
@@ -66,13 +77,13 @@ export default function Home() {
         <div className="text-center mb-10 max-w-2xl mx-auto">
           <div className="flex justify-center mb-6">
             <div className="relative">
-              <Image src="/logo.jpg" alt="Shadow Senpai" width={80} height={80}
+              <Image src="/logo.jpg" alt="MAVORI" width={80} height={80}
                 className="w-20 h-20 rounded-2xl object-cover ring-1 ring-white/15 relative z-10" />
               <div className="absolute -inset-4 rounded-3xl bg-gradient-to-br from-violet-500/20 to-cyan-500/20 blur-2xl" />
             </div>
           </div>
           <h1 className="text-5xl sm:text-6xl font-bold text-gradient mb-4 leading-tight tracking-tight">
-            Shadow Senpai
+            MAVORI
           </h1>
           <p className="text-base text-muted/80 max-w-md mx-auto leading-relaxed">
             AI-powered studio for anime scripts, voiceovers, and visual content.
@@ -89,13 +100,14 @@ export default function Home() {
           </div>
         </Link>
 
-        {/* ═══ 4 Tool Cards — 2x2 grid ═══ */}
+        {/* ═══ Tool Cards — 2x2 grid + featured YouTube card ═══ */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-3xl w-full">
-          {TOOLS.map((tool) => {
+          {TOOLS.map((tool, idx) => {
             const Icon = tool.icon;
+            const isLast = idx === TOOLS.length - 1 && TOOLS.length % 2 === 1;
             return (
               <Link key={tool.href} href={tool.href}
-                className="group relative rounded-2xl p-[1px] transition-all duration-500 hover:translate-y-[-3px]">
+                className={`group relative rounded-2xl p-[1px] transition-all duration-500 hover:translate-y-[-3px] ${isLast ? "sm:col-span-2" : ""}`}>
                 <div className="absolute -inset-1 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-xl"
                   style={{ background: tool.glowColor }} />
                 <div className={`relative rounded-2xl p-6 overflow-hidden border border-white/[0.06] ${tool.borderHover} transition-all duration-500`}
@@ -121,7 +133,7 @@ export default function Home() {
       </main>
 
       <footer className="py-6 text-center relative z-10">
-        <p className="text-[11px] text-muted/30 tracking-wide">Shadow Senpai Studio</p>
+        <p className="text-[11px] text-muted/30 tracking-wide">MAVORI Studio</p>
       </footer>
     </div>
   );

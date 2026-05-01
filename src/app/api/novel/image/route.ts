@@ -72,34 +72,64 @@ function isRateLimitError(errorMsg: string): boolean {
  * NOT digital painting. NOT concept art. A literal frame from an anime show.
  * This prompt is used for BOTH OpenAI and Gemini — same quality for both.
  */
-function buildImagePrompt(rawPrompt: string): string {
+function buildImagePrompt(rawPrompt: string, provider: ImageProvider = "openai"): string {
   let clean = rawPrompt.replace(/^(Japanese anime|Anime art style|manga art|Modern Japanese)[^.]*\.\s*/i, "").trim();
 
-  return `A frame from a Japanese anime TV episode. 16:9 widescreen. This must look EXACTLY like a screenshot taken from a real anime show airing on TV.
+  // OpenAI needs MUCH stronger anime enforcement — it defaults to realism
+  if (provider === "openai") {
+    return `2D Japanese anime cel animation frame. Hand-drawn anime art. 16:9 widescreen.
 
 SCENE: ${clean}
 
-ANIME TV FRAME STYLE (follow these EXACTLY — this is the most important part):
-- FLAT cel-shading with only 2-3 shadow tones per surface. NO smooth gradients. Hard shadow edges.
-- VISIBLE black outlines on ALL edges — characters, clothes, hair, objects. Clean consistent lineart thickness.
-- FLAT color fills for skin (one base color + one shadow color, nothing more)
-- Hair drawn as CHUNKY STRANDS with flat color, not individual realistic strands
-- Eyes: clean anime eyes with flat iris color, white highlight dot, simple eyelashes. NOT hyper-detailed.
-- Clothing: flat colors with simple fold lines, not rendered fabric textures
-- Background: softer/slightly blurred compared to characters, simple painted style
-- Lighting: simple directional light creating hard cel-shaded shadows, NOT volumetric or atmospheric
-- Overall: CLEAN, SIMPLE, FLAT — like anime studios A-1 Pictures, CloverWorks, MAPPA produce
+THIS IMAGE MUST LOOK LIKE A 2D HAND-DRAWN ANIME FRAME — like a screenshot from Demon Slayer, Jujutsu Kaisen, or Solo Leveling anime on Crunchyroll.
 
-WHAT TO AVOID (CRITICAL):
-- NO smooth gradient shading (use FLAT cel-shading only)
-- NO realistic skin rendering or subsurface scattering
-- NO individual hair strands (use chunky anime hair blocks)
-- NO hyper-detailed eyes with realistic iris patterns
-- NO over-detailed backgrounds competing with characters
-- NO digital painting look, NO concept art look, NO 3D render look
-- NO text, subtitles, captions, or watermarks
+MANDATORY 2D ANIME STYLE (the MOST important instruction — follow EXACTLY):
+- 100% FLAT 2D cel-shading. ONLY 2-3 flat color tones per surface. ZERO smooth gradients anywhere.
+- THICK visible BLACK OUTLINES on every single edge — characters, hair, clothes, objects, furniture, walls. Like hand-drawn ink lines.
+- Hair = CHUNKY FLAT COLOR BLOCKS with black outline separating each section. NOT individual strands.
+- Skin = ONE flat base color + ONE flat shadow color. Nothing else. Like a coloring book filled in.
+- Eyes = big simple anime eyes with flat color iris + white dot highlight. NOT detailed realistic eyes.
+- Clothes = flat solid colors with simple fold lines. NO fabric texture, NO wrinkles detail, NO brand logos.
+- ALL OBJECTS (money, phones, bags, food) = simplified flat colored shapes with black outlines. NOT photorealistic objects.
+- Background = VERY SIMPLE. Flat colored walls, simple shapes for shelves/furniture. BLURRY or LOW DETAIL compared to characters. Like anime where budget goes to characters not backgrounds.
+- Rain/weather = simple white lines on flat background. NOT realistic rain rendering.
+- Lighting = ONE simple directional shadow. Hard edge. NOT soft, NOT volumetric, NOT atmospheric glow.
 
-This should look like someone pressed pause on Crunchyroll and took a screenshot. ONE scene, ONE frame, LANDSCAPE 16:9.`;
+THE ENTIRE IMAGE MUST LOOK LIKE IT WAS DRAWN WITH:
+1. Black ink pen for outlines
+2. Flat markers/paint bucket for coloring
+3. Maximum 2-3 colors per surface area
+4. Zero texture detail on any surface
+
+ABSOLUTELY FORBIDDEN:
+- NO realistic rendering, textures, or materials of ANY kind
+- NO smooth gradient shading or color blending
+- NO detailed backgrounds — keep them simple and flat
+- NO realistic objects (money = flat green rectangles, phone = flat rectangle with screen glow)
+- NO 3D render, oil painting, digital painting, or concept art look
+- NO text, watermarks, or subtitles
+
+CHARACTER AGE: Adults = tall, mature sharp face, defined jawline, adult proportions. NOT children.
+
+Think of this as a FRAME from an anime episode — pure 2D, flat colors, black outlines, simple and clean. LANDSCAPE 16:9.`;
+  }
+
+  // Gemini follows anime style better with a simpler prompt
+  return `Anime TV episode screenshot, 16:9 widescreen, flat cel-shading, visible black outlines.
+
+${clean}
+
+CHARACTER AGE: Characters MUST look their stated age. Adults = tall, mature face, defined jawline, broad shoulders, 170-185cm. NOT teenagers.
+
+ART STYLE:
+- Flat cel-shading, 2-3 shadow tones, hard shadow edges, NO gradients
+- Visible black outlines on all edges
+- Chunky hair strands, flat color skin, simple anime eyes
+- Like MAPPA / A-1 Pictures anime quality
+- NOT digital painting, NOT concept art, NOT 3D render
+- NO text, subtitles, or watermarks
+
+ONE scene, ONE frame, LANDSCAPE 16:9.`;
 }
 
 // ── OpenAI ──
@@ -178,9 +208,6 @@ export async function POST(request: NextRequest) {
     // Build the full fallback chain
     const chain = buildFallbackChain(imgModel, imgProvider);
 
-    // SAME prompt for both providers — consistent quality
-    const fullPrompt = buildImagePrompt(prompt);
-
     let lastError = "";
 
     // Try each model in the fallback chain
@@ -196,6 +223,9 @@ export async function POST(request: NextRequest) {
 
       try {
         console.log(`[Image API] ${attempt > 0 ? "FALLBACK " : ""}attempt ${attempt + 1}: provider=${tryProvider}, model=${tryModel}`);
+
+        // Build provider-specific prompt — OpenAI needs stronger anime enforcement
+        const fullPrompt = buildImagePrompt(prompt, tryProvider);
 
         const imageUrl = tryProvider === "gemini"
           ? await generateGeminiImage(tryKey, fullPrompt, tryModel)

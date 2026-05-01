@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Shadow Senpai Studio - AI Script & Audio",
+  title: "MAVORI Studio - AI Script & Audio",
   description:
-    "AI-powered toolkit for creating YouTube-ready anime & manga scripts and cinematic voiceovers. By Shadow Senpai.",
+    "AI-powered toolkit for creating YouTube-ready anime & manga scripts and cinematic voiceovers. By MAVORI.",
 };
 
 export default function RootLayout({

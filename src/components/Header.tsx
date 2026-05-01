@@ -1,10 +1,11 @@
 "use client";
 
-import { Settings, Coins, Zap, FileText } from "lucide-react";
+import { Settings, Coins, Zap, FileText, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { loadUsage, formatCost, loadCurrency, UsageRecord } from "@/lib/usage";
+import { getCooldowns, formatCooldownTime, getModelDisplayName, CooldownEntry } from "@/lib/cooldowns";
 
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
@@ -16,6 +17,7 @@ export default function Header() {
   const [cost, setCost] = useState("");
   const [tokens, setTokens] = useState("");
   const [currencyCode, setCurrencyCode] = useState("USD");
+  const [cooldowns, setCooldowns] = useState<CooldownEntry[]>([]);
 
   useEffect(() => {
     const update = () => {
@@ -24,6 +26,7 @@ export default function Header() {
       setCost(formatCost(usage.totalCostUSD, code));
       setCurrencyCode(code);
       setTokens(formatTokens(usage.totalInputTokens + usage.totalOutputTokens));
+      setCooldowns(getCooldowns());
     };
     update();
     const interval = setInterval(update, 2000);
@@ -39,7 +42,7 @@ export default function Header() {
             <div className="relative">
               <Image
                 src="/logo.jpg"
-                alt="Shadow Senpai"
+                alt="MAVORI"
                 width={38}
                 height={38}
                 className="w-[38px] h-[38px] rounded-xl object-cover ring-1 ring-white/10 group-hover:ring-primary/40 transition-all duration-300"
@@ -48,7 +51,7 @@ export default function Header() {
             </div>
             <div>
               <h1 className="text-lg font-bold text-gradient leading-tight">
-                Shadow Senpai
+                MAVORI
               </h1>
               <p className="text-[10px] text-muted/60 tracking-widest uppercase">
                 Studio
@@ -58,6 +61,23 @@ export default function Header() {
 
           {/* Right side */}
           <div className="flex items-center gap-2">
+            {/* Exhausted models — only show if any are rate limited */}
+            {cooldowns.length > 0 && (
+              <Link href="/settings" className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-red-500/15 border border-red-500/20 hover:bg-red-500/25 transition-all">
+                <AlertTriangle className="w-3 h-3 text-red-400 animate-pulse" />
+                <div className="flex items-center gap-1.5">
+                  {cooldowns.slice(0, 3).map((cd, i) => (
+                    <span key={i} className="text-[10px] font-medium text-red-300">
+                      {getModelDisplayName(cd.model).split(" ").slice(0, 2).join(" ")} {formatCooldownTime(Math.max(0, cd.cooldownUntil - Date.now()))}
+                    </span>
+                  ))}
+                  {cooldowns.length > 3 && (
+                    <span className="text-[10px] text-red-400/60">+{cooldowns.length - 3}</span>
+                  )}
+                </div>
+              </Link>
+            )}
+
             {/* Tokens pill */}
             <div className="glass flex items-center gap-1.5 px-3 py-1.5 rounded-full">
               <Zap className="w-3 h-3 text-violet-400" />

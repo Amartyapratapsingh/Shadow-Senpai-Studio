@@ -93,8 +93,25 @@ export const PRICING: Record<string, { input: number; output: number }> = {
   "gemini-2.0-flash-lite":         { input: 0.075, output: 0.30 },
 };
 
-// TTS pricing: OpenAI gpt-4o-mini-tts = $15 per 1M characters
-const TTS_COST_PER_MILLION_CHARS = 15;
+// TTS pricing: OpenAI gpt-4o-mini-tts = $0.60 input + $12.00 output per 1M tokens
+// Gemini TTS = $0.50 input + $10.00 output per 1M tokens
+// Rough estimate: 1 char ≈ 0.25 tokens, so 1M chars ≈ 250K tokens
+// OpenAI: 250K × $12/1M = $3 per 1M chars for output (dominant cost)
+// Keeping $15 was WILDLY wrong — actual cost is much lower for text but higher for audio output tokens
+const TTS_COST_PER_MILLION_CHARS = 3; // $3 per 1M chars (conservative estimate)
+
+// Image generation pricing (per image, USD)
+// Gemini prices based on actual billing data (~₹10-11 per image = ~$0.13)
+const IMAGE_PRICING: Record<string, number> = {
+  // OpenAI - landscape 1536x1024
+  "gpt-image-1.5": 0.05,     // Medium quality
+  "gpt-image-1": 0.063,      // Medium quality
+  "gpt-image-1-mini": 0.015, // Medium quality
+  // Gemini — actual billing shows ₹10-11 per image (~$0.13)
+  "gemini-3-pro-image-preview": 0.14,      // ~₹12
+  "gemini-3.1-flash-image-preview": 0.12,  // ~₹10
+  "gemini-2.5-flash-image": 0.12,          // ~₹10
+};
 
 export const CURRENCIES: { code: string; symbol: string; rate: number }[] = [
   { code: "USD", symbol: "$", rate: 1 },
@@ -166,6 +183,13 @@ export function addTTSUsage(charCount: number): void {
   const cost = (charCount / 1_000_000) * TTS_COST_PER_MILLION_CHARS;
   usage.totalTTSChars += charCount;
   usage.totalCostUSD += cost;
+  saveUsage(usage);
+}
+
+export function addImageUsage(model: string, count: number = 1): void {
+  const usage = loadUsage();
+  const pricePerImage = IMAGE_PRICING[model] || 0.04; // default $0.04
+  usage.totalCostUSD += pricePerImage * count;
   saveUsage(usage);
 }
 

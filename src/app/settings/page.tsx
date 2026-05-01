@@ -25,7 +25,13 @@ import {
   Coins,
   RotateCcw,
   Globe,
+  AlertTriangle,
+  Clock,
+  ImageIcon,
+  Volume2,
+  Cpu,
 } from "lucide-react";
+import { getCooldowns, clearCooldowns, formatCooldownTime, getModelDisplayName, CooldownEntry } from "@/lib/cooldowns";
 import Link from "next/link";
 
 const PROVIDERS = [
@@ -74,14 +80,28 @@ export default function SettingsPage() {
   const [currency, setCurrencyState] = useState("USD");
   const [usage, setUsage] = useState<UsageRecord | null>(null);
   const [usageReset, setUsageReset] = useState(false);
+  const [cooldowns, setCooldowns] = useState<CooldownEntry[]>([]);
+  const [cooldownsCleared, setCooldownsCleared] = useState(false);
 
   useEffect(() => {
     const savedKeys = loadApiKeys();
     setKeys(savedKeys);
     setCurrencyState(loadCurrency());
     setUsage(loadUsage());
+    setCooldowns(getCooldowns());
     setLoaded(true);
+
+    // Update cooldowns every second for live countdown
+    const cdInterval = setInterval(() => setCooldowns(getCooldowns()), 1000);
+    return () => clearInterval(cdInterval);
   }, []);
+
+  const handleClearCooldowns = () => {
+    clearCooldowns();
+    setCooldowns([]);
+    setCooldownsCleared(true);
+    setTimeout(() => setCooldownsCleared(false), 2000);
+  };
 
   const handleSave = () => {
     saveApiKeys(keys);
@@ -147,6 +167,72 @@ export default function SettingsPage() {
             API keys, currency, and usage tracking.
           </p>
         </div>
+
+        {/* ═══════ EXHAUSTED MODELS — Only shown when models are rate-limited ═══════ */}
+        {cooldowns.length > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-400" />
+                Exhausted Models
+                <span className="text-xs font-normal text-red-400/70 ml-1">({cooldowns.length} rate-limited)</span>
+              </h2>
+              <button
+                onClick={handleClearCooldowns}
+                className="flex items-center gap-1 text-xs text-muted hover:text-danger transition-colors"
+              >
+                {cooldownsCleared ? <Check className="w-3 h-3 text-success" /> : <RotateCcw className="w-3 h-3" />}
+                {cooldownsCleared ? "Cleared!" : "Clear All"}
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {cooldowns.map((cd, i) => {
+                const remaining = Math.max(0, cd.cooldownUntil - Date.now());
+                const totalDuration = cd.cooldownUntil - cd.exhaustedAt;
+                const elapsed = Date.now() - cd.exhaustedAt;
+                const progressPct = Math.min(100, (elapsed / totalDuration) * 100);
+                const TypeIcon = cd.type === "image" ? ImageIcon : cd.type === "audio" ? Volume2 : Cpu;
+                const typeColor = cd.type === "image" ? "text-cyan-400" : cd.type === "audio" ? "text-fuchsia-400" : "text-violet-400";
+                const typeBg = cd.type === "image" ? "bg-cyan-500/10" : cd.type === "audio" ? "bg-fuchsia-500/10" : "bg-violet-500/10";
+
+                return (
+                  <div key={i} className="rounded-xl border border-red-500/20 bg-red-500/[0.05] p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-lg ${typeBg} flex items-center justify-center`}>
+                          <TypeIcon className={`w-4 h-4 ${typeColor}`} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">{getModelDisplayName(cd.model)}</p>
+                          <p className="text-[10px] text-muted uppercase tracking-wider">{cd.provider} / {cd.type}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3 h-3 text-red-400 animate-pulse" />
+                          <span className="text-sm font-bold text-red-400">{formatCooldownTime(remaining)}</span>
+                        </div>
+                        <p className="text-[10px] text-muted">until available</p>
+                      </div>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div className="w-full h-1.5 rounded-full bg-white/5 mt-2 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-red-500 to-amber-500 transition-all duration-1000"
+                        style={{ width: `${progressPct}%` }}
+                      />
+                    </div>
+
+                    {/* Error message */}
+                    <p className="text-[10px] text-muted/50 mt-2 truncate">{cd.errorMessage}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* ═══════ USAGE & CURRENCY ═══════ */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
@@ -370,7 +456,7 @@ export default function SettingsPage() {
 
       <footer className="py-6 text-center">
         <p className="text-xs text-muted">
-          Shadow Senpai Studio — Keys are stored in your browser only.
+          MAVORI Studio — Keys are stored in your browser only.
         </p>
       </footer>
     </div>
