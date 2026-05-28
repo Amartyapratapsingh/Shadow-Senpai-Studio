@@ -214,7 +214,7 @@ export default function AudioPage() {
   const canGenerate = script.trim().length > 0 && status !== "generating";
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-[#0a0a0a]">
       <Header />
 
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">

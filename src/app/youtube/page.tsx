@@ -1235,7 +1235,7 @@ export default function YouTubePage() {
   })();
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-[#0a0a0a]">
       <Header />
       {audioUrl && <audio ref={audioRef} src={audioUrl} onEnded={() => setAudioPlaying(false)} onPause={() => setAudioPlaying(false)} onPlay={() => setAudioPlaying(true)} />}
 

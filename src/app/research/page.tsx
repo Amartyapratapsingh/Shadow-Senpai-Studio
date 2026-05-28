@@ -281,7 +281,7 @@ Expert in Japanese light novels, Chinese web novels, Korean web novels. Focus on
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-[#0a0a0a]">
       <Header />
       <audio ref={audioRef} onEnded={() => setPlayingAudioIdx(null)} />
 

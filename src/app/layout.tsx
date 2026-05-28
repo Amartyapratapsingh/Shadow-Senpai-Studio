@@ -28,9 +28,13 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-background text-foreground overflow-x-hidden">
-        <div className="mesh-bg" />
-        {children}
+      <body className="min-h-full flex flex-col bg-[#0a0a0a] text-foreground overflow-x-hidden">
+        {/* Global red glow — strong, visible on every page */}
+        <div className="fixed inset-0 pointer-events-none z-0"
+          style={{ background: "radial-gradient(ellipse 100% 60% at 50% -5%, rgba(200, 20, 20, 0.35) 0%, rgba(150, 10, 10, 0.18) 30%, rgba(80, 5, 5, 0.08) 55%, transparent 80%)" }} />
+        <div className="relative z-10 flex flex-col min-h-full">
+          {children}
+        </div>
       </body>
     </html>
   );
