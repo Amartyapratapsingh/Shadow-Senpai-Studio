@@ -95,7 +95,7 @@ export default function Home() {
   const [ytVideos, setYtVideos] = useState(FALLBACK_VIDEOS);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Intro plays ONCE per session — not when navigating back
+  // Intro plays ONCE per session
   useEffect(() => {
     const played = sessionStorage.getItem("rekvon_intro_played");
     if (played) setShowIntro(false);
@@ -131,11 +131,29 @@ export default function Home() {
     }, 500);
   };
 
-  // Auto-play video as soon as component mounts
+  // Auto-play video when component mounts
   useEffect(() => {
-    if (showIntro && videoRef.current) {
-      videoRef.current.play().catch(() => {});
+    if (!showIntro || !videoRef.current) return;
+
+    const video = videoRef.current;
+
+    // Try to play — if browser blocks autoplay, skip intro
+    const playPromise = video.play();
+    if (playPromise) {
+      playPromise.catch(() => {
+        // Autoplay blocked — skip to homepage
+        setShowIntro(false);
+        sessionStorage.setItem("rekvon_intro_played", "1");
+      });
     }
+
+    // Safety: if video takes longer than 60 seconds, skip
+    const safety = setTimeout(() => {
+      setShowIntro(false);
+      sessionStorage.setItem("rekvon_intro_played", "1");
+    }, 60000);
+
+    return () => clearTimeout(safety);
   }, [showIntro]);
 
   // ═══ INTRO VIDEO SPLASH ═══
@@ -148,6 +166,7 @@ export default function Home() {
           autoPlay
           playsInline
           onEnded={handleVideoEnd}
+          onError={() => { setShowIntro(false); sessionStorage.setItem("rekvon_intro_played", "1"); }}
           className="w-full h-full object-contain"
         />
       </div>
