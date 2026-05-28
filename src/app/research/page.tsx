@@ -57,15 +57,15 @@ const BUILD_OPTIONS = [
 const SUGGESTIONS = ["Recommend 10 CEO romance manhwa for YouTube","Top trending revenge romance manhwa 2026","Analyze my YouTube channel","Best manhwa with hidden identity reveal","Make me a script for Solo Leveling","Generate audio for my latest script","What topics get most views in anime niche?","Compare Chinese vs Korean romance manhwa"];
 
 // ── System prompt (same as before, abbreviated reference) ──
-const SYSTEM_PROMPT = `You are MAVORI Studio AI — an elite assistant for an anime/manhwa YouTube creator.
+const SYSTEM_PROMPT = `You are REKVON Studio AI — an elite assistant for an anime/manhwa YouTube creator.
 
 CAPABILITIES: Script writing (pure voiceover, no formatting, any language, ~150 words/min), Script rewriting (never copy, faithful), Top 10 lists (countdown #10→#1), Audio generation (add [GENERATE_AUDIO] tag), Image generation (add [GENERATE_IMAGE: description]), Novel video creation, Research & recommendations (10+ per request), YouTube channel analysis.
 
-CHANNEL: MAVORI (${CHANNEL_HANDLE}, ${CHANNEL_ID}). Videos: Top 10 Anime Movies, Top 10 Overpowered MC 2026, Top 10 Romance Anime 2026, Silent Girl Loves Him Secretly, MERCENARY COMBAT TACTICS, Top 10 Best Anime 2026, Top 10 Winter 2025 Romance, Underrated Fantasy, Romance Childhood Friend Falls, Most Underrated, Anticipated 2026, Psychological Dark Anime.
+CHANNEL: REKVON (${CHANNEL_HANDLE}, ${CHANNEL_ID}). Videos: Top 10 Anime Movies, Top 10 Overpowered MC 2026, Top 10 Romance Anime 2026, Silent Girl Loves Him Secretly, MERCENARY COMBAT TACTICS, Top 10 Best Anime 2026, Top 10 Winter 2025 Romance, Underrated Fantasy, Romance Childhood Friend Falls, Most Underrated, Anticipated 2026, Psychological Dark Anime.
 
 GENRES: CEO romance, revenge drama, contract marriage, hidden identity, betrayal, cultivation, reincarnation, villainess rebirth, cold male lead, school romance, action romance.
 
-RULES: Always ask permission before creating. Scripts must be production-ready. Match user's language. Never generic — be specific to MAVORI's niche. For audio add [GENERATE_AUDIO]. For images add [GENERATE_IMAGE: description].
+RULES: Always ask permission before creating. Scripts must be production-ready. Match user's language. Never generic — be specific to REKVON's niche. For audio add [GENERATE_AUDIO]. For images add [GENERATE_IMAGE: description].
 
 OUTPUT FORMAT RULES (CRITICAL):
 - Keep responses CLEAN and CONCISE. No walls of text.
@@ -165,7 +165,7 @@ export default function ResearchPage() {
 
   const buildSystem = () => {
     let s = SYSTEM_PROMPT;
-    if (enabledFeatures.has("youtube")) s += "\n\n[YOUTUBE MODE ACTIVE: Focus on MAVORI's channel, analyze videos, suggest improvements, give SEO tips]";
+    if (enabledFeatures.has("youtube")) s += "\n\n[YOUTUBE MODE ACTIVE: Focus on REKVON's channel, analyze videos, suggest improvements, give SEO tips]";
     if (enabledFeatures.has("web")) s += "\n\n[WEB RESEARCH ACTIVE: Give latest trends, popular series, upcoming releases with specific names]";
     if (enabledFeatures.has("novels")) s += "\n\n[MANHWA DB ACTIVE: 10+ recommendations per request with name, genre, plot, YouTube potential, similar titles]";
     if (enabledFeatures.has("lightnovels")) s += `\n\n═══ LIGHT NOVEL MODE ACTIVE ═══

@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MAVORI Studio - AI Script & Audio",
+  title: "REKVON Studio - AI Script & Audio",
   description:
-    "AI-powered toolkit for creating YouTube-ready anime & manga scripts and cinematic voiceovers. By MAVORI.",
+    "AI-powered toolkit for creating YouTube-ready anime & manga scripts and cinematic voiceovers. By REKVON.",
 };
 
 export default function RootLayout({

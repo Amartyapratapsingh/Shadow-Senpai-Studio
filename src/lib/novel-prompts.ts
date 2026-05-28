@@ -381,13 +381,19 @@ Write narration for THIS panel. 15-30 words MAX. 1-2 sentences only.
 
 CHARACTER TRACKING (MOST IMPORTANT — read carefully):
 - Use the CHARACTER LIST above. Match characters in the panel to their NAMES from the list.
-- REMEMBER every character's NAME and GENDER from the list and previous panels.
-- MALE characters → always use "वो", "उसने", "उसका" (he/him/his). NEVER use "वो" with female verb forms for a male character.
-- FEMALE characters → always use "वो", "उसने", "उसकी" (she/her). NEVER use male verb forms for a female character.
-- NEVER swap he/she (वो/उसका vs उसकी). If a character was male in panel 1, he stays male FOREVER.
-- ALWAYS use the character's NAME when referring to them, not generic words. Say "लिन शिन ने कहा" not "उस लड़के ने कहा".
-- If a character was introduced before (e.g., the rich guy, the girlfriend), refer to them by their NAME or their ROLE (अमीर लड़का, उसकी गर्लफ्रेंड). NEVER say "वो आदमी" or "वो बंदा" randomly.
-- NEVER call a living character "dead" or use wrong descriptions. Describe characters by their ROLE (अमीर लड़का = rich guy, बॉस = boss, सिस्टम = system voice).
+- ONLY use a character's NAME if you are SURE it is that specific character in the panel. Look at their appearance carefully.
+- MALE characters → always use male verb forms. FEMALE → always female verb forms. NEVER swap.
+- NEVER swap he/she. If a character was male in panel 1, he stays male FOREVER.
+
+NAMED vs UNNAMED characters:
+- If a character from the CHARACTER LIST appears → use their EXACT name (लिन शिन, लुओ यायी, etc.)
+- If RANDOM/UNKNOWN people appear (strangers, bystanders, random girls commenting, shopkeepers, classmates) → call them by description, NOT by a named character's name:
+  - Random girls = "वहां की लड़कियां", "एक लड़की ने कहा", "कुछ लड़कियों ने कहा"
+  - Random guys = "एक लड़के ने कहा", "भीड़ में से किसी ने कहा"
+  - Shopkeeper = "दुकानदार ने कहा"
+  - Teacher = "टीचर ने कहा"
+- NEVER use लुओ यायी or लियू चेंग's name for random unnamed girls. They are DIFFERENT people.
+- If you're NOT SURE who a character is → use a generic description ("एक लड़की", "वो आदमी"), NOT a named character's name.
 
 PRIORITY ORDER (do the FIRST one that applies):
 
@@ -419,5 +425,17 @@ ZERO PAUSES IN AUDIO (CRITICAL):
 
 ${langInstruction}
 
-Output ONLY 1-2 clean flowing sentences (15-30 words). No ellipsis, no dashes, no pause markers:`;
+OUTPUT FORMAT — strict JSON, no markdown:
+{
+  "script": "1-2 clean flowing sentences in Hindi (15-30 words). No ellipsis, no dashes.",
+  "newCharacter": "Name (Gender) - role description"
+}
+
+RULES for newCharacter:
+- If a NEW named character appears in this panel who is NOT in the character list above → fill in newCharacter with their name, gender, and role.
+- Read their name from the dialogue/text in the panel if visible.
+- If no new character appears → set newCharacter to ""
+- Only NAMED characters with dialogue or story importance. NOT random bystanders.
+
+Output ONLY the JSON:`;
 }

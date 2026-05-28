@@ -173,7 +173,7 @@ export default function AudioPage() {
     const ext = audioProvider === "gemini" ? "wav" : "mp3";
     const a = document.createElement("a");
     a.href = audioUrl;
-    a.download = `mavori-audio-${Date.now()}.${ext}`;
+    a.download = `rekvon-audio-${Date.now()}.${ext}`;
     a.click();
   };
 
@@ -432,7 +432,7 @@ export default function AudioPage() {
                 {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
               </button>
               <div className="flex-1">
-                <p className="text-sm font-medium text-foreground">MAVORI Voiceover</p>
+                <p className="text-sm font-medium text-foreground">REKVON Voiceover</p>
                 <p className="text-xs text-muted">{wordCount.toLocaleString()} words / ~{estimatedMinutes} min</p>
               </div>
               <button onClick={handleDownload} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-accent/10 text-accent hover:bg-accent/20 transition-colors text-sm font-medium">
@@ -459,7 +459,7 @@ export default function AudioPage() {
       </main>
 
       <footer className="py-6 text-center">
-        <p className="text-xs text-muted">MAVORI Studio — Audio powered by OpenAI & Gemini TTS.</p>
+        <p className="text-xs text-muted">REKVON Studio — Audio powered by OpenAI & Gemini TTS.</p>
       </footer>
     </div>
   );

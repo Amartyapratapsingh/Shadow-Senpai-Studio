@@ -6,7 +6,7 @@ import { STYLE_OPTIONS } from "@/lib/prompts";
 import { NOVEL_GENRES, NovelGenre } from "@/lib/novel-genres";
 import { addTextUsage, addTTSUsage, estimateTokens, loadDefaultVoice } from "@/lib/usage";
 import { getApiKey } from "@/lib/api-keys";
-import { AudioProvider } from "@/lib/audio-utils";
+import { AudioProvider, OPENAI_VOICES, GEMINI_VOICES } from "@/lib/audio-utils";
 import { roughSplitIntoChunks, fallbackSplitIntoScenes } from "@/lib/scene-splitter";
 import { logAI, logError, logCost, logInfo } from "@/lib/logger";
 import { addCooldown } from "@/lib/cooldowns";
@@ -1205,7 +1205,7 @@ export default function YouTubePage() {
   }, [panels, selectedTextModel, primaryLanguage, selectedAudioProvider, selectedAudioVoice]);
 
   const toggleAudio = () => { if (!audioRef.current) return; if (audioPlaying) audioRef.current.pause(); else audioRef.current.play(); setAudioPlaying(!audioPlaying); };
-  const downloadAudio = () => { if (!audioUrl) return; const ext = voiceInfo.provider === "gemini" ? "wav" : "mp3"; const a = document.createElement("a"); a.href = audioUrl; a.download = `mavori-novel-${Date.now()}.${ext}`; a.click(); };
+  const downloadAudio = () => { if (!audioUrl) return; const ext = voiceInfo.provider === "gemini" ? "wav" : "mp3"; const a = document.createElement("a"); a.href = audioUrl; a.download = `rekvon-novel-${Date.now()}.${ext}`; a.click(); };
 
   const StatusIcon = ({ s }: { s: string }) => {
     if (s === "done") return <Check className="w-4 h-4 text-success" />;
@@ -1295,22 +1295,8 @@ export default function YouTubePage() {
                   </select>
                   <select value={selectedAudioVoice} onChange={e => setSelectedAudioVoice(e.target.value)}
                     className="w-full px-2.5 py-2 rounded-lg bg-background border border-card-border text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 appearance-none cursor-pointer">
-                    {selectedAudioProvider === "openai" && <option value="cedar">Cedar (Deep, warm)</option>}
-                    {selectedAudioProvider === "openai" && <option value="nova">Nova (Female)</option>}
-                    {selectedAudioProvider === "openai" && <option value="onyx">Onyx (Dark, powerful)</option>}
-                    {selectedAudioProvider === "openai" && <option value="ash">Ash (Soft, calm)</option>}
-                    {selectedAudioProvider === "openai" && <option value="ballad">Ballad (Cinematic)</option>}
-                    {selectedAudioProvider === "openai" && <option value="coral">Coral (Warm, friendly)</option>}
-                    {selectedAudioProvider === "openai" && <option value="sage">Sage (Wise)</option>}
-                    {selectedAudioProvider === "openai" && <option value="shimmer">Shimmer (Bright)</option>}
-                    {selectedAudioProvider === "gemini" && <option value="Charon">Charon (Deep)</option>}
-                    {selectedAudioProvider === "gemini" && <option value="Kore">Kore (Clear)</option>}
-                    {selectedAudioProvider === "gemini" && <option value="Fenrir">Fenrir (Powerful)</option>}
-                    {selectedAudioProvider === "gemini" && <option value="Puck">Puck (Playful)</option>}
-                    {selectedAudioProvider === "gemini" && <option value="Aoede">Aoede (Melodic)</option>}
-                    {selectedAudioProvider === "gemini" && <option value="Orus">Orus (Bold)</option>}
-                    {selectedAudioProvider === "gemini" && <option value="Leda">Leda (Gentle)</option>}
-                    {selectedAudioProvider === "gemini" && <option value="Zephyr">Zephyr (Bright)</option>}
+                    {selectedAudioProvider === "openai" && OPENAI_VOICES.map(v => <option key={v.value} value={v.value}>{v.label} ({v.description})</option>)}
+                    {selectedAudioProvider === "gemini" && GEMINI_VOICES.map(v => <option key={v.value} value={v.value}>{v.label} ({v.description})</option>)}
                   </select>
                 </div>
               </div>
@@ -1638,7 +1624,7 @@ export default function YouTubePage() {
         {error && <div className="mt-6 p-4 rounded-xl bg-danger/10 border border-danger/20 flex items-start gap-3"><AlertCircle className="w-5 h-5 text-danger shrink-0 mt-0.5" /><div><p className="text-sm font-medium text-danger">Error</p><p className="text-sm text-danger/80 mt-1">{error}</p></div></div>}
         {phase === "input" && !error && <div className="text-center py-6"><p className="text-xs text-muted max-w-md mx-auto">Paste your raw novel chapters, hit start — viral rewrite, audio, and images all generate automatically.</p></div>}
       </main>
-      <footer className="py-6 text-center"><p className="text-xs text-muted">MAVORI Studio — YouTube Video Creator.</p></footer>
+      <footer className="py-6 text-center"><p className="text-xs text-muted">REKVON Studio — YouTube Video Creator.</p></footer>
     </div>
   );
 }

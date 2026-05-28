@@ -38,25 +38,14 @@ export default function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="relative">
-              <Image
-                src="/logo.jpg"
-                alt="MAVORI"
-                width={38}
-                height={38}
-                className="w-[38px] h-[38px] rounded-xl object-cover ring-1 ring-white/10 group-hover:ring-primary/40 transition-all duration-300"
-              />
-              <div className="absolute -inset-1 rounded-xl bg-primary/20 blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-gradient leading-tight">
-                MAVORI
-              </h1>
-              <p className="text-[10px] text-muted/60 tracking-widest uppercase">
-                Studio
-              </p>
-            </div>
+          <Link href="/" className="flex items-center gap-2 group">
+            <Image
+              src="/rekvon-logo.png"
+              alt="REKVON"
+              width={120}
+              height={30}
+              className="h-6 w-auto object-contain group-hover:opacity-80 transition-opacity duration-300"
+            />
           </Link>
 
           {/* Right side */}

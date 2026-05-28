@@ -83,9 +83,33 @@ export default function RewriterPage() {
   const [audioProvider, setAudioProvider] = useState<AudioProvider>("openai");
   const [audioVoice, setAudioVoice] = useState("cedar");
 
-  // ── Character list ──
+  // ── Character list — saved per manhua name in localStorage ──
   const [characterList, setCharacterList] = useState("");
   const [fetchingChars, setFetchingChars] = useState(false);
+
+  // Save character list to localStorage whenever it changes
+  const saveCharacters = useCallback((name: string, chars: string) => {
+    if (!name.trim() || !chars.trim()) return;
+    const key = `ss_rewriter_chars_${name.trim().toLowerCase().replace(/\s+/g, "_")}`;
+    try { localStorage.setItem(key, chars); } catch {}
+  }, []);
+
+  // Load character list from localStorage when manhua name changes
+  const loadCharacters = useCallback((name: string): string => {
+    if (!name.trim()) return "";
+    const key = `ss_rewriter_chars_${name.trim().toLowerCase().replace(/\s+/g, "_")}`;
+    try { return localStorage.getItem(key) || ""; } catch { return ""; }
+  }, []);
+
+  // Auto-load characters when manhua name changes
+  const handleManhwaNameChange = useCallback((name: string) => {
+    setManhwaName(name);
+    const saved = loadCharacters(name);
+    if (saved) {
+      setCharacterList(saved);
+      logInfo("character", `Loaded saved characters for "${name}"`);
+    }
+  }, [loadCharacters]);
 
   // ── Panel state ──
   const [panels, setPanels] = useState<PanelSlot[]>([
@@ -119,6 +143,47 @@ export default function RewriterPage() {
       if (prev.length >= MAX_PANELS) return prev;
       return [...prev, createEmptyPanel(prev.length + 1)];
     });
+  }, []);
+
+  // ── Bulk upload — select multiple images at once, auto-create panels ──
+  const bulkInputRef = useRef<HTMLInputElement | null>(null);
+  const handleBulkUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    // Sort files by name to maintain panel order
+    const sortedFiles = Array.from(files).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+    setPanels((prev) => {
+      // Find first empty slot
+      const firstEmptyIdx = prev.findIndex((p) => p.file === null);
+      const newPanels = [...prev];
+      let fileIdx = 0;
+
+      // Fill existing empty slots first
+      for (let i = 0; i < newPanels.length && fileIdx < sortedFiles.length; i++) {
+        if (newPanels[i].file === null) {
+          const file = sortedFiles[fileIdx];
+          newPanels[i] = { ...newPanels[i], file, previewUrl: URL.createObjectURL(file), script: "", audioUrl: null, audioBlob: null, status: "idle", error: null };
+          fileIdx++;
+        }
+      }
+
+      // Create new panels for remaining files
+      while (fileIdx < sortedFiles.length && newPanels.length < MAX_PANELS) {
+        const file = sortedFiles[fileIdx];
+        const newPanel = createEmptyPanel(newPanels.length + 1);
+        newPanel.file = file;
+        newPanel.previewUrl = URL.createObjectURL(file);
+        newPanels.push(newPanel);
+        fileIdx++;
+      }
+
+      return newPanels;
+    });
+
+    // Reset input so same files can be selected again
+    e.target.value = "";
   }, []);
 
   const handleRemoveImage = useCallback((panelId: number) => {
@@ -200,6 +265,7 @@ export default function RewriterPage() {
         const data = await res.json();
         if (data.reply) {
           setCharacterList(data.reply);
+          saveCharacters(manhwaName, data.reply);
           logInfo("character", `Fetched character list for "${manhwaName}"`);
         }
       }
@@ -353,7 +419,28 @@ export default function RewriterPage() {
           throw new Error(err.error || "Vision API failed");
         }
 
-        const { script } = await visionRes.json();
+        const visionData = await visionRes.json();
+        let script = visionData.script || "";
+
+        // Try to parse JSON response (new format with newCharacter)
+        try {
+          const cleaned = script.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+          const parsed = JSON.parse(cleaned);
+          if (parsed.script) {
+            script = parsed.script;
+            // Auto-save new character if detected
+            if (parsed.newCharacter && parsed.newCharacter.trim()) {
+              setCharacterList((prev) => {
+                const updated = prev + (prev.trim() ? "\n" : "") + parsed.newCharacter.trim();
+                saveCharacters(manhwaName, updated);
+                logInfo("character", `New character auto-detected in panel ${processedCount}: ${parsed.newCharacter.trim()}`);
+                return updated;
+              });
+            }
+          }
+        } catch {
+          // Not JSON — use raw script as-is (fallback)
+        }
 
         // Track usage
         const inputEst = estimateTokens(systemPrompt);
@@ -740,7 +827,7 @@ export default function RewriterPage() {
               <input
                 type="text"
                 value={manhwaName}
-                onChange={(e) => setManhwaName(e.target.value)}
+                onChange={(e) => handleManhwaNameChange(e.target.value)}
                 placeholder="e.g. Solo Leveling, Tomb Raider King..."
                 disabled={isProcessing}
                 className="w-full px-3 py-2.5 rounded-xl bg-background border border-card-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-all placeholder:text-muted/50 disabled:opacity-50"
@@ -783,7 +870,7 @@ export default function RewriterPage() {
               </div>
               <textarea
                 value={characterList}
-                onChange={(e) => setCharacterList(e.target.value)}
+                onChange={(e) => { setCharacterList(e.target.value); saveCharacters(manhwaName, e.target.value); }}
                 placeholder={"Enter character names or click 'Auto-detect':\nLin Xin (Male) - MC, poor guy who gets the system\nLiu Cheng (Female) - ex-girlfriend who dumped MC\nRich Guy (Male) - rival who stole the girlfriend"}
                 disabled={isProcessing}
                 rows={4}
@@ -1091,19 +1178,40 @@ export default function RewriterPage() {
             </div>
           ))}
 
-          {/* Add Panel Button */}
+          {/* Add Panel / Bulk Upload Buttons */}
           {panels.length < MAX_PANELS && !isProcessing && (
-            <button
-              onClick={handleAddPanel}
-              className="rounded-2xl border-2 border-dashed border-card-border min-h-[200px] flex flex-col items-center justify-center gap-2 hover:border-violet-500/50 hover:bg-violet-500/5 transition-all cursor-pointer group"
-            >
-              <div className="w-10 h-10 rounded-xl bg-card border border-card-border flex items-center justify-center group-hover:border-violet-500/50 transition-colors">
-                <Plus className="w-5 h-5 text-muted group-hover:text-violet-400 transition-colors" />
-              </div>
-              <span className="text-xs text-muted group-hover:text-violet-400 transition-colors">
-                Add Panel ({panels.length}/{MAX_PANELS})
-              </span>
-            </button>
+            <div className="rounded-2xl border-2 border-dashed border-card-border min-h-[200px] flex flex-col items-center justify-center gap-4 hover:border-violet-500/50 hover:bg-violet-500/5 transition-all">
+              {/* Bulk Upload — select all images at once */}
+              <input
+                ref={bulkInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleBulkUpload}
+                className="hidden"
+              />
+              <button
+                onClick={() => bulkInputRef.current?.click()}
+                className="flex flex-col items-center gap-2 cursor-pointer group px-6 py-3 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/20 transition-all"
+              >
+                <Upload className="w-5 h-5 text-violet-400" />
+                <span className="text-xs font-medium text-violet-400">
+                  Upload All Panels At Once
+                </span>
+                <span className="text-[10px] text-muted/50">Select multiple images — auto-fills panels</span>
+              </button>
+
+              {/* Single Panel Add */}
+              <button
+                onClick={handleAddPanel}
+                className="flex items-center gap-2 cursor-pointer group px-4 py-2 rounded-lg hover:bg-white/5 transition-all"
+              >
+                <Plus className="w-4 h-4 text-muted group-hover:text-violet-400 transition-colors" />
+                <span className="text-xs text-muted group-hover:text-violet-400 transition-colors">
+                  Add Single Panel ({panels.length}/{MAX_PANELS})
+                </span>
+              </button>
+            </div>
           )}
         </div>
 

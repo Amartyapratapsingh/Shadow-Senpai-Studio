@@ -456,7 +456,7 @@ export default function SettingsPage() {
 
       <footer className="py-6 text-center">
         <p className="text-xs text-muted">
-          MAVORI Studio — Keys are stored in your browser only.
+          REKVON Studio — Keys are stored in your browser only.
         </p>
       </footer>
     </div>

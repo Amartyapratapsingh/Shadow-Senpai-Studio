@@ -42,6 +42,10 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 textarea { scrollbar-width: thin; }
 
+/* ── Hide scrollbar for Netflix-style horizontal scroll ── */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
 /* ── Glassmorphism ── */
 .glass {
   background: rgba(255, 255, 255, 0.03);

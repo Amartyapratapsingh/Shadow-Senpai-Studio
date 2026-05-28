@@ -508,7 +508,7 @@ export default function Top10Page() {
 
       <footer className="py-6 text-center">
         <p className="text-xs text-muted">
-          MAVORI Studio — Your scripts stay private.
+          REKVON Studio — Your scripts stay private.
         </p>
       </footer>
     </div>

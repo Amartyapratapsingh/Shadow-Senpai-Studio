@@ -11,6 +11,7 @@ export type AudioProvider = "openai" | "gemini";
 
 export const OPENAI_VOICES: { value: string; label: string; description: string }[] = [
   { value: "cedar", label: "Cedar", description: "Deep, warm, cinematic — best for anime narration" },
+  { value: "feather", label: "Feather", description: "Smooth, storytelling, natural flow" },
   { value: "nova", label: "Nova", description: "Clear, expressive female narrator" },
   { value: "verse", label: "Verse", description: "Pure energy and excitement" },
   { value: "fable", label: "Fable", description: "Storytelling with emotion and depth" },
