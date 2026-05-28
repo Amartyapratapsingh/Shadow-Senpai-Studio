@@ -46,6 +46,38 @@ textarea { scrollbar-width: thin; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
+/* ── Feature card auto-animations ── */
+@keyframes featureGlow {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+@keyframes borderPulse {
+  0%, 100% { border-color: rgba(255,255,255,0.06); }
+  50% { border-color: rgba(220,40,40,0.25); }
+}
+@keyframes iconFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+@keyframes accentLine {
+  0% { transform: scaleX(0); opacity: 0; }
+  50% { transform: scaleX(1); opacity: 1; }
+  100% { transform: scaleX(0); opacity: 0; }
+}
+@keyframes starTwinkle {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(250,200,50,0.3)); }
+  50% { filter: drop-shadow(0 0 10px rgba(250,200,50,0.8)); }
+}
+@keyframes reviewGlow {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+.feature-card { animation: borderPulse 4s ease-in-out infinite; }
+.feature-icon { animation: iconFloat 3s ease-in-out infinite; }
+.feature-line { animation: accentLine 4s ease-in-out infinite; transform-origin: left; }
+.star-glow { animation: starTwinkle 2s ease-in-out infinite; }
+.review-card { animation: borderPulse 5s ease-in-out infinite; }
+
 /* ── Glassmorphism ── */
 .glass {
   background: rgba(255, 255, 255, 0.03);
