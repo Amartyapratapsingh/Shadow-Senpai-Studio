@@ -137,13 +137,14 @@ export default function Home() {
 
     const video = videoRef.current;
 
-    // Try to play — if browser blocks autoplay, skip intro
+    // Try with audio first
+    video.muted = false;
     const playPromise = video.play();
     if (playPromise) {
       playPromise.catch(() => {
-        // Autoplay blocked — skip to homepage
-        setShowIntro(false);
-        sessionStorage.setItem("rekvon_intro_played", "1");
+        // Browser blocked autoplay with audio — retry muted (always works)
+        video.muted = true;
+        video.play().catch(() => {});
       });
     }
 
