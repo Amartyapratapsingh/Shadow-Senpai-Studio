@@ -87,6 +87,14 @@ textarea { scrollbar-width: thin; }
 .pillar-icon { animation: iconFloat 3s ease-in-out infinite; }
 .pillar-line { animation: accentLine 4s ease-in-out infinite; transform-origin: left; }
 
+/* ── Falling stars animation ── */
+@keyframes starFall {
+  0% { transform: translateY(-20px) translateX(0px); opacity: 0; }
+  5% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(100vh) translateX(30px); opacity: 0; }
+}
+
 /* ── Loading dots pulse ── */
 @keyframes pulse {
   0%, 100% { opacity: 0.3; transform: scale(0.8); }

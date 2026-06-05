@@ -218,30 +218,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Small preview cards — appear during video */}
-          <div className="absolute bottom-24 left-0 right-0 z-20 px-4"
-            style={{ opacity: Math.min(1, Math.max(0, (scrollY - 50) / 300)) }}>
-            <div className="max-w-4xl mx-auto flex justify-center gap-3">
-              {PILLARS.map((p, i) => {
-                const Icon = p.icon;
-                const show = videoTime > 1.5 + i * 0.6 || scrollY > 100 + i * 40;
-                return (
-                  <div key={p.number} className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl flex items-center justify-center transition-all duration-700"
-                    style={{
-                      background: `linear-gradient(135deg, ${p.accent}30, ${p.accent}10)`,
-                      border: `1px solid ${p.accent}30`,
-                      boxShadow: `0 0 20px ${p.glow}`,
-                      opacity: show ? 1 : 0,
-                      transform: show ? "translateY(0) scale(1)" : "translateY(20px) scale(0.5)",
-                      transitionDelay: `${i * 200}ms`,
-                    }}>
-                    <Icon className="w-6 h-6 sm:w-7 sm:h-7" style={{ color: p.accent }} />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
           {/* Scroll indicator */}
           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-2 animate-bounce"
             style={{ opacity: Math.max(0, 1 - scrollY / 200) }}>
@@ -262,23 +238,6 @@ export default function Home() {
       {/* ═══ ABOUT — Bottom ═══ */}
       <AboutBottom onAI={() => setShowTools(true)} />
 
-      {/* ═══ FOOTER ═══ */}
-      <footer className="border-t border-white/[0.04] py-10">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6">
-          <Image src="/rekvon-logo.png" alt="REKVON" width={100} height={25} className="h-5 w-auto opacity-30" />
-          <div className="flex flex-wrap items-center justify-center gap-6">
-            {[
-              { label: "Creator Services", href: "/services/creators" },
-              { label: "Growth", href: "/services/growth" },
-              { label: "Community", href: "/services/community" },
-              { label: "About", href: "/about" },
-              { label: "Contact", href: "/contact" },
-            ].map(l => <Link key={l.href} href={l.href} className="text-xs text-white/20 hover:text-white/50 transition-colors">{l.label}</Link>)}
-            <button onClick={() => setShowTools(true)} className="text-xs text-white/20 hover:text-white/50 transition-colors">AI Studio</button>
-          </div>
-          <p className="text-[10px] text-white/15">© 2026 REKVON</p>
-        </div>
-      </footer>
     </div>
   );
 }
