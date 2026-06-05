@@ -78,6 +78,24 @@ textarea { scrollbar-width: thin; }
 .star-glow { animation: starTwinkle 2s ease-in-out infinite; }
 .review-card { animation: borderPulse 5s ease-in-out infinite; }
 
+/* ── Pillar card auto-animations ── */
+@keyframes pillarBorderPulse {
+  0%, 100% { border-color: rgba(255,255,255,0.06); }
+  50% { border-color: rgba(255,255,255,0.18); }
+}
+.pillar-card { animation: pillarBorderPulse 4s ease-in-out infinite; }
+.pillar-icon { animation: iconFloat 3s ease-in-out infinite; }
+.pillar-line { animation: accentLine 4s ease-in-out infinite; transform-origin: left; }
+
+/* ── Orbit animation for icon dots ── */
+@keyframes orbit {
+  0% { transform: rotate(0deg) translateX(80px) rotate(0deg); }
+  100% { transform: rotate(360deg) translateX(80px) rotate(-360deg); }
+}
+
+/* ── Smooth scroll snap ── */
+html { scroll-behavior: smooth; }
+
 /* ── Glassmorphism ── */
 .glass {
   background: rgba(255, 255, 255, 0.03);

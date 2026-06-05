@@ -1,483 +1,343 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Header from "@/components/Header";
 import Link from "next/link";
 import Image from "next/image";
-import { Wand2, ListOrdered, Volume2, Film, Search, ArrowRight, Play, Sparkles, ImageIcon, X, Zap, Shield, Globe, Cpu, Star, Quote, ChevronLeft, ChevronRight, Users } from "lucide-react";
+import { Wand2, ListOrdered, Volume2, Film, ArrowRight, ArrowDown, Play, ImageIcon, X, Cpu, TrendingUp, MessageSquare, Mail } from "lucide-react";
 
-// All tools
+// AI tools overlay
 const ALL_TOOLS = [
   { title: "Panel Script Writer", subtitle: "Image → Script → Audio", description: "Upload manhwa panels — AI reads each image, writes narration, generates audio per panel.", href: "/rewriter", icon: Wand2, gradient: "from-violet-500 to-indigo-600", glowColor: "rgba(139, 92, 246, 0.3)", tag: "POPULAR" },
   { title: "Video Creator", subtitle: "Novel → Panels → Audio → Images", description: "Paste a script, AI generates panels, anime images, and voiceover automatically.", href: "/novel", icon: Film, gradient: "from-orange-500 to-red-600", glowColor: "rgba(249, 115, 22, 0.3)", tag: "FULL PIPELINE" },
   { title: "YouTube Creator", subtitle: "Raw Novel → Viral Script", description: "Paste raw novel chapters — AI rewrites into fast-paced viral YouTube narration.", href: "/youtube", icon: Play, gradient: "from-red-500 to-red-700", glowColor: "rgba(239, 68, 68, 0.3)", tag: "NEW" },
-  { title: "Image Generator", subtitle: "AI Anime Images", description: "Generate anime-style images from text prompts. Supports OpenAI and Gemini models.", href: "/novel", icon: ImageIcon, gradient: "from-emerald-500 to-teal-600", glowColor: "rgba(16, 185, 129, 0.3)", tag: "AI ART" },
-  { title: "Audio Generator", subtitle: "AI Voiceover", description: "14 OpenAI + 30 Gemini voices. Cinematic narration with consistent tone.", href: "/audio", icon: Volume2, gradient: "from-cyan-500 to-blue-600", glowColor: "rgba(56, 189, 248, 0.3)" },
-  { title: "Top 10 Generator", subtitle: "Anime Lists", description: "Custom topics, preset categories, or your own list. Full voiceover script.", href: "/top10", icon: ListOrdered, gradient: "from-pink-500 to-rose-600", glowColor: "rgba(244, 63, 94, 0.3)" },
+  { title: "Image Generator", subtitle: "AI Anime Images", description: "Generate anime-style images from text prompts.", href: "/novel", icon: ImageIcon, gradient: "from-emerald-500 to-teal-600", glowColor: "rgba(16, 185, 129, 0.3)", tag: "AI ART" },
+  { title: "Audio Generator", subtitle: "AI Voiceover", description: "14 OpenAI + 30 Gemini voices. Cinematic narration.", href: "/audio", icon: Volume2, gradient: "from-cyan-500 to-blue-600", glowColor: "rgba(56, 189, 248, 0.3)" },
+  { title: "Top 10 Generator", subtitle: "Anime Lists", description: "Custom topics, preset categories, full voiceover script.", href: "/top10", icon: ListOrdered, gradient: "from-pink-500 to-rose-600", glowColor: "rgba(244, 63, 94, 0.3)" },
 ];
 
-function formatViews(n: number): string {
-  if (n >= 1000000) return (n / 1000000).toFixed(1) + "M views";
-  if (n >= 1000) return (n / 1000).toFixed(1) + "K views";
-  if (n > 0) return n + " views";
-  return "";
-}
-
-// Anime style videos (6)
-const ANIME_VIDEOS = [
-  { id: "qy6UrpxUGxw", title: "", views: 0 },
-  { id: "ECsqbKHSteQ", title: "", views: 0 },
-  { id: "Gb77ep0rNLg", title: "", views: 0 },
-  { id: "5G_XkMF_u6k", title: "", views: 0 },
-  { id: "2TrJm6mWowY", title: "", views: 0 },
-  { id: "N2ufWLtP-Ek", title: "", views: 0 },
-].map(v => ({ ...v, thumbnail: `https://img.youtube.com/vi/${v.id}/hqdefault.jpg` }));
-
-// Natural/Human style videos (6)
-const HUMAN_VIDEOS_LIST = [
-  { id: "F5X_mhgzRkI", title: "", views: 0 },
-  { id: "yX3fAwdQmuk", title: "", views: 0 },
-  { id: "S2so5vG1rok", title: "", views: 0 },
-  { id: "Xnalw8J5iVk", title: "", views: 0 },
-  { id: "ZyeFaXrC-VI", title: "", views: 0 },
-  { id: "gmTLoWhcLz0", title: "", views: 0 },
-].map(v => ({ ...v, thumbnail: `https://img.youtube.com/vi/${v.id}/hqdefault.jpg` }));
-
-// Features
-const FEATURES = [
-  { icon: Cpu, title: "3 AI Providers", description: "OpenAI, Anthropic Claude, and Google Gemini — choose the best model for each task.", color: "text-violet-400", bg: "bg-violet-500/10" },
-  { icon: Volume2, title: "44+ AI Voices", description: "14 OpenAI + 30 Gemini voices with consistent tone, zero pauses, natural flow.", color: "text-cyan-400", bg: "bg-cyan-500/10" },
-  { icon: Globe, title: "Hindi & English", description: "Full support for both languages. Simple conversational Hindi — not complex Shudh Hindi.", color: "text-emerald-400", bg: "bg-emerald-500/10" },
-  { icon: ImageIcon, title: "AI Image Generation", description: "Anime-style panel images with character consistency, outfit changes, and location accuracy.", color: "text-orange-400", bg: "bg-orange-500/10" },
-  { icon: Zap, title: "Auto-Fallback", description: "If one AI model hits rate limits, automatically switches to the next — zero downtime.", color: "text-amber-400", bg: "bg-amber-500/10" },
-  { icon: Shield, title: "Character Registry", description: "AI remembers character faces, names, and genders across 100+ panels. Never confuses characters.", color: "text-rose-400", bg: "bg-rose-500/10" },
+const PILLARS = [
+  { icon: Film, title: "Creator\nServices", subtitle: "FOR YOUTUBERS & CREATORS", number: "01", description: "Professional video editors, channel managers, content strategy, and growth tips.", features: ["Video Editing", "Channel Management", "Content Strategy", "Thumbnail Design"], gradient: "from-red-500 to-orange-600", glow: "rgba(239,68,68,0.15)", accent: "#ef4444", href: "/services/creators", isAI: false },
+  { icon: Cpu, title: "AI\nStudio", subtitle: "AI-POWERED TOOLS", number: "02", description: "Script writing, voiceover generation, anime images, and manhwa panel narration.", features: ["Panel Script Writer", "Video Creator", "Audio Generator", "Image Generation"], gradient: "from-violet-500 to-indigo-600", glow: "rgba(139,92,246,0.15)", accent: "#8b5cf6", href: "#", isAI: true },
+  { icon: TrendingUp, title: "Growth &\nMarketing", subtitle: "SCALE YOUR CHANNEL", number: "03", description: "PR campaigns, content distribution, engagement boosting, and paid promotions.", features: ["PR Campaigns", "Paid Promotions", "SEO Optimization", "Analytics"], gradient: "from-emerald-500 to-teal-600", glow: "rgba(16,185,129,0.15)", accent: "#10b981", href: "/services/growth", isAI: false },
+  { icon: MessageSquare, title: "Community\n& Tech", subtitle: "BUILD & CONNECT", number: "04", description: "Discord setup, community management, bot development, and tech solutions.", features: ["Discord Setup", "Bot Development", "Website Dev", "Tech Support"], gradient: "from-cyan-500 to-blue-600", glow: "rgba(6,182,212,0.15)", accent: "#06b6d4", href: "/services/community", isAI: false },
 ];
 
-// User feedback/reviews
-const REVIEWS = [
-  { name: "Arjun S.", role: "Manhwa YouTuber", text: "REKVON changed my workflow completely. I used to spend 8 hours on one video — now it takes 2 hours. The AI narration is so natural, my viewers can't tell it's AI.", stars: 5 },
-  { name: "Priya M.", role: "Content Creator", text: "The Panel Script Writer is insane. I just upload my manhwa pages and it writes the perfect Hindi script for each panel. Audio quality is theater-level.", stars: 5 },
-  { name: "Vikram R.", role: "Web Novel Channel", text: "YouTube Creator tool is a game-changer. I paste the raw novel chapter and it rewrites into that fast-paced viral style automatically. My retention rate went from 30% to 65%.", stars: 5 },
-  { name: "Sneha K.", role: "Anime Reviewer", text: "44 voices and they all sound consistent across panels. No more weird pitch jumps or speed changes. Finally a tool that understands Hindi narration.", stars: 5 },
-  { name: "Rahul D.", role: "Manhwa Recap Hindi", text: "The character registry feature is genius. Same face, same name, same gender across 100 panels. Other tools can't do this. REKVON is levels ahead.", stars: 5 },
-];
-
-function VideoCard({ video }: { video: { id: string; title: string; thumbnail: string; views?: number } }) {
-  const [playing, setPlaying] = useState(false);
-
-  if (playing) {
-    return (
-      <div>
-        <div className="relative rounded-xl overflow-hidden mb-2.5 aspect-video">
-          <iframe
-            src={`https://www.youtube.com/embed/${video.id}?autoplay=1&rel=0`}
-            allow="autoplay; encrypted-media"
-            allowFullScreen
-            className="w-full h-full absolute inset-0"
-          />
-        </div>
-        <p className="text-sm text-white font-medium line-clamp-2 leading-snug">{video.title}</p>
-        {video.views !== undefined && video.views > 0 && (
-          <p className="text-[11px] text-white/30 mt-1">{formatViews(video.views)}</p>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <button onClick={() => setPlaying(true)} className="group text-left w-full">
-      <div className="relative rounded-xl overflow-hidden mb-2.5">
-        <img src={video.thumbnail} alt={video.title} className="w-full aspect-video object-cover group-hover:scale-105 transition-transform duration-500" />
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-300 flex items-center justify-center">
-          <div className="w-12 h-12 rounded-full bg-red-600/90 flex items-center justify-center opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all duration-300">
-            <Play className="w-5 h-5 text-white ml-0.5" />
-          </div>
-        </div>
-      </div>
-      <p className="text-sm text-white/80 group-hover:text-white transition-colors line-clamp-2 leading-snug font-medium">{video.title}</p>
-      {video.views !== undefined && video.views > 0 && (
-        <p className="text-[11px] text-white/30 mt-1">{formatViews(video.views)}</p>
-      )}
-    </button>
-  );
+// Scroll reveal hook
+function useReveal(threshold = 0.2) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [vis, setVis] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setVis(true); }, { threshold });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [threshold]);
+  return { ref, vis };
 }
 
 export default function Home() {
   const [showIntro, setShowIntro] = useState(true);
   const [introFading, setIntroFading] = useState(false);
   const [showTools, setShowTools] = useState(false);
-  const [reviewIdx, setReviewIdx] = useState(0);
-  const [animeVideos, setAnimeVideos] = useState(ANIME_VIDEOS);
-  const [humanVideos, setHumanVideos] = useState(HUMAN_VIDEOS_LIST);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const [scrollY, setScrollY] = useState(0);
+  const introVideoRef = useRef<HTMLVideoElement>(null);
+  const bgVideoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const h = () => setScrollY(window.scrollY);
+    window.addEventListener("scroll", h, { passive: true });
+    return () => window.removeEventListener("scroll", h);
+  }, []);
 
   useEffect(() => {
     const played = sessionStorage.getItem("rekvon_intro_played");
     if (played) setShowIntro(false);
   }, []);
 
-  // Fetch video titles & views from YouTube API for our hardcoded video IDs
-  useEffect(() => {
-    const fetchTitles = async () => {
-      try {
-        const keys = JSON.parse(localStorage.getItem("manhuascript_api_keys") || "{}");
-        const apiKey = keys.gemini || "";
-        if (!apiKey) return;
-
-        const allIds = [...ANIME_VIDEOS, ...HUMAN_VIDEOS_LIST].map(v => v.id).join(",");
-        const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${allIds}&key=${apiKey}`);
-        if (!res.ok) return;
-        const data = await res.json();
-
-        const videoMap: Record<string, { title: string; views: number; thumbnail: string }> = {};
-        for (const item of data.items || []) {
-          videoMap[item.id] = {
-            title: item.snippet?.title || "",
-            views: parseInt(item.statistics?.viewCount || "0"),
-            thumbnail: item.snippet?.thumbnails?.high?.url || `https://img.youtube.com/vi/${item.id}/hqdefault.jpg`,
-          };
-        }
-
-        setAnimeVideos(prev => prev.map(v => videoMap[v.id] ? { ...v, ...videoMap[v.id] } : v));
-        setHumanVideos(prev => prev.map(v => videoMap[v.id] ? { ...v, ...videoMap[v.id] } : v));
-      } catch {}
-    };
-    fetchTitles();
-  }, []);
-
-  const handleVideoEnd = () => {
+  const handleVideoEnd = useCallback(() => {
     setIntroFading(true);
     setTimeout(() => { setShowIntro(false); sessionStorage.setItem("rekvon_intro_played", "1"); }, 500);
-  };
-
-  useEffect(() => {
-    if (!showIntro || !videoRef.current) return;
-    const video = videoRef.current;
-    video.muted = false;
-    const p = video.play();
-    if (p) p.catch(() => { video.muted = true; video.play().catch(() => {}); });
-    const safety = setTimeout(() => { setShowIntro(false); sessionStorage.setItem("rekvon_intro_played", "1"); }, 60000);
-    return () => clearTimeout(safety);
-  }, [showIntro]);
-
-  // Auto-rotate reviews
-  useEffect(() => {
-    const interval = setInterval(() => setReviewIdx(prev => (prev + 1) % REVIEWS.length), 5000);
-    return () => clearInterval(interval);
   }, []);
 
-  // ═══ INTRO ═══
+  useEffect(() => {
+    if (!showIntro || !introVideoRef.current) return;
+    const v = introVideoRef.current;
+    v.muted = false;
+    const p = v.play();
+    if (p) p.catch(() => { v.muted = true; v.play().catch(() => {}); });
+    const t = setTimeout(() => { setShowIntro(false); sessionStorage.setItem("rekvon_intro_played", "1"); }, 60000);
+    return () => clearTimeout(t);
+  }, [showIntro]);
+
+  // Track video time for card reveals (MUST be before any conditional returns)
+  const [videoTime, setVideoTime] = useState(0);
+  const heroVideoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const v = heroVideoRef.current;
+    if (!v) return;
+    const handleTime = () => setVideoTime(v.currentTime);
+    v.addEventListener("timeupdate", handleTime);
+    return () => v.removeEventListener("timeupdate", handleTime);
+  }, [showIntro, showTools]);
+
+  // ═══ INTRO SPLASH ═══
   if (showIntro) {
     return (
       <div className={`fixed inset-0 z-[9999] bg-black flex items-center justify-center transition-opacity duration-500 ${introFading ? "opacity-0" : "opacity-100"}`}>
-        <video ref={videoRef} src="/intro.mp4" autoPlay playsInline onEnded={handleVideoEnd}
+        <video ref={introVideoRef} src="/intro.mp4" autoPlay playsInline onEnded={handleVideoEnd}
           onError={() => { setShowIntro(false); sessionStorage.setItem("rekvon_intro_played", "1"); }}
           className="w-full h-full object-contain" />
       </div>
     );
   }
 
-  // ═══ TOOLS PAGE ═══
+  // ═══ TOOLS OVERLAY ═══
   if (showTools) {
     return (
       <div className="min-h-screen bg-[#0a0a0a]">
         <Header />
         <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <button onClick={() => setShowTools(false)} className="flex items-center gap-2 text-sm text-white/40 hover:text-white transition-colors mb-8">
-            <X className="w-4 h-4" /> Back to Home
-          </button>
-          <div className="mb-10">
-            <h1 className="text-3xl font-bold text-white mb-2">Choose a Tool</h1>
-            <p className="text-white/40">Everything you need to create manhwa content.</p>
-          </div>
+          <button onClick={() => setShowTools(false)} className="flex items-center gap-2 text-sm text-white/40 hover:text-white transition-colors mb-8"><X className="w-4 h-4" /> Back</button>
+          <h1 className="text-3xl font-bold text-white mb-2">AI Studio</h1>
+          <p className="text-white/40 mb-10">Choose a tool to start creating.</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {ALL_TOOLS.map((tool) => {
-              const Icon = tool.icon;
-              return (
-                <Link key={tool.title} href={tool.href} className="group relative rounded-xl overflow-hidden border border-white/[0.08] hover:border-white/20 transition-all duration-500 hover:translate-y-[-4px]" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)" }}>
-                  <div className={`h-1 w-full bg-gradient-to-r ${tool.gradient}`} />
-                  {"tag" in tool && tool.tag && (
-                    <div className="absolute top-4 right-4">
-                      <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-gradient-to-r ${tool.gradient} text-white`}>{tool.tag}</span>
-                    </div>
-                  )}
-                  <div className="p-5">
-                    <div className={`w-11 h-11 rounded-lg bg-gradient-to-br ${tool.gradient} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-500 shadow-lg`} style={{ boxShadow: `0 4px 20px ${tool.glowColor}` }}>
-                      <Icon className="w-5 h-5 text-white" />
-                    </div>
-                    <h3 className="text-base font-bold text-white mb-1">{tool.title}</h3>
-                    <p className="text-[11px] text-white/40 uppercase tracking-wider mb-3">{tool.subtitle}</p>
-                    <p className="text-[13px] text-white/50 leading-relaxed">{tool.description}</p>
-                    <div className="mt-4 flex items-center gap-1 text-white/30 group-hover:text-white/60 transition-colors">
-                      <span className="text-xs">Open</span>
-                      <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </div>
-                  <div className="absolute -inset-1 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-xl -z-10" style={{ background: tool.glowColor }} />
-                </Link>
-              );
-            })}
+            {ALL_TOOLS.map((t) => { const I = t.icon; return (
+              <Link key={t.title} href={t.href} className="group relative rounded-xl overflow-hidden border border-white/[0.08] hover:border-white/20 transition-all duration-500 hover:translate-y-[-4px]" style={{ background: "linear-gradient(180deg,rgba(255,255,255,0.06)0%,rgba(255,255,255,0.02)100%)" }}>
+                <div className={`h-1 w-full bg-gradient-to-r ${t.gradient}`} />
+                {"tag" in t && t.tag && <div className="absolute top-4 right-4"><span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-gradient-to-r ${t.gradient} text-white`}>{t.tag}</span></div>}
+                <div className="p-5">
+                  <div className={`w-11 h-11 rounded-lg bg-gradient-to-br ${t.gradient} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg`} style={{ boxShadow: `0 4px 20px ${t.glowColor}` }}><I className="w-5 h-5 text-white" /></div>
+                  <h3 className="text-base font-bold text-white mb-1">{t.title}</h3>
+                  <p className="text-[11px] text-white/40 uppercase tracking-wider mb-3">{t.subtitle}</p>
+                  <p className="text-[13px] text-white/50 leading-relaxed">{t.description}</p>
+                </div>
+              </Link>
+            ); })}
           </div>
         </main>
       </div>
     );
   }
 
-  // ═══ MAIN HOMEPAGE ═══
+  // ═══ MAIN PAGE ═══
   return (
-    <div className="min-h-screen flex flex-col bg-[#0a0a0a]">
-      <Header />
+    <div className="bg-[#0a0a0a] text-white overflow-x-hidden">
 
-      {/* ═══ RED GLOW — covers hero + video sections, then fades ═══ */}
-      <div className="relative">
-        {/* Giant radial glow that stretches from top all the way down past the video sections */}
-        <div className="absolute top-0 left-0 right-0 h-[1600px] pointer-events-none"
-          style={{ background: "radial-gradient(ellipse 90% 50% at 50% 15%, rgba(180, 20, 20, 0.18) 0%, rgba(130, 10, 10, 0.10) 25%, rgba(80, 5, 5, 0.05) 50%, transparent 75%)" }} />
+      {/* ═══ HERO — Cinematic video with logo + auto-revealing cards ═══ */}
+      <section className="relative min-h-[200vh] overflow-hidden">
+        {/* Sticky video container */}
+        <div className="sticky top-0 h-screen overflow-hidden">
+          {/* Video background — plays once, stops at end */}
+          <video ref={heroVideoRef} src="/hero-bg.mp4" autoPlay muted playsInline
+            className="absolute inset-0 w-full h-full object-cover" />
 
-      {/* ═══ HERO ═══ */}
-      <section className="relative overflow-visible">
-        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-24">
-          <div className="flex flex-col items-center text-center">
-            {/* BIGGER logo */}
-            <div className="relative mb-8">
-              <Image src="/rekvon-logo.png" alt="REKVON" width={500} height={120} className="h-24 sm:h-32 lg:h-36 w-auto object-contain relative z-10" priority />
-              {/* Glow behind logo */}
-              <div className="absolute inset-0 -m-24"
-                style={{ background: "radial-gradient(ellipse at center, rgba(220, 30, 30, 0.22) 0%, rgba(150, 10, 10, 0.10) 40%, transparent 70%)" }} />
-            </div>
-            <p className="text-lg sm:text-xl text-white/60 max-w-lg leading-relaxed mb-8">AI-powered studio for manhwa scripts, voiceovers, and visual content.</p>
-            <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
-              <button onClick={() => setShowTools(true)} className="flex items-center gap-2 px-6 py-3 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold text-sm transition-all hover:scale-105 shadow-lg shadow-red-600/25 cursor-pointer">
-                <Wand2 className="w-4 h-4" /> Start Creating
-              </button>
-              <Link href="/research" className="flex items-center gap-2 px-6 py-3 rounded-lg bg-white/10 hover:bg-white/15 text-white font-semibold text-sm transition-all border border-white/10">
-                <Search className="w-4 h-4" /> Research Lab
-              </Link>
-            </div>
-            <div className="flex items-center gap-6 text-xs text-white/30">
-              <span className="flex items-center gap-1.5"><Sparkles className="w-3 h-3 text-red-400" /> 3 AI Providers</span>
-              <span className="w-1 h-1 rounded-full bg-white/20" />
-              <span>44+ Voices</span>
-              <span className="w-1 h-1 rounded-full bg-white/20" />
-              <span>Hindi & English</span>
+          {/* Gradient overlays */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/30 to-black/80" />
+          <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 60% 50% at 50% 40%, transparent 0%, rgba(0,0,0,0.6) 100%)" }} />
+
+          {/* REKVON Logo — parallax up on scroll */}
+          <div className="absolute inset-0 flex items-center justify-center z-10"
+            style={{ transform: `translateY(${scrollY * -0.3}px)`, opacity: Math.max(0, 1 - scrollY / 500) }}>
+            <div className="text-center px-4">
+              <Image src="/rekvon-logo.png" alt="REKVON" width={600} height={150}
+                className="h-20 sm:h-28 lg:h-40 w-auto object-contain mx-auto mb-6 drop-shadow-[0_0_40px_rgba(220,30,30,0.3)]" priority />
+              <p className="text-lg sm:text-xl lg:text-2xl text-white/50 font-light tracking-wide">
+                Everything Creators Need. <span className="text-white font-medium">One Platform.</span>
+              </p>
             </div>
           </div>
+
+          {/* Small preview cards — appear during video */}
+          <div className="absolute bottom-24 left-0 right-0 z-20 px-4"
+            style={{ opacity: Math.min(1, Math.max(0, (scrollY - 50) / 300)) }}>
+            <div className="max-w-4xl mx-auto flex justify-center gap-3">
+              {PILLARS.map((p, i) => {
+                const Icon = p.icon;
+                const show = videoTime > 1.5 + i * 0.6 || scrollY > 100 + i * 40;
+                return (
+                  <div key={p.number} className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl flex items-center justify-center transition-all duration-700"
+                    style={{
+                      background: `linear-gradient(135deg, ${p.accent}30, ${p.accent}10)`,
+                      border: `1px solid ${p.accent}30`,
+                      boxShadow: `0 0 20px ${p.glow}`,
+                      opacity: show ? 1 : 0,
+                      transform: show ? "translateY(0) scale(1)" : "translateY(20px) scale(0.5)",
+                      transitionDelay: `${i * 200}ms`,
+                    }}>
+                    <Icon className="w-6 h-6 sm:w-7 sm:h-7" style={{ color: p.accent }} />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Scroll indicator */}
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-2 animate-bounce"
+            style={{ opacity: Math.max(0, 1 - scrollY / 200) }}>
+            <span className="text-[9px] text-white/25 uppercase tracking-[0.25em]">Scroll to Explore</span>
+            <ArrowDown className="w-4 h-4 text-white/25" />
+          </div>
+
+          {/* Bottom fade to black */}
+          <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#0a0a0a] to-transparent z-[5]" />
         </div>
       </section>
 
-      {/* ═══ ANIME STYLE VIDEOS — 2 rows × 3 ═══ */}
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mb-12">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <Play className="w-4 h-4 text-red-500" /> Anime Style Content
-          </h2>
-          <a href="https://www.youtube.com/@REKVON" target="_blank" rel="noopener noreferrer" className="text-xs text-red-400 hover:text-red-300 transition-colors flex items-center gap-1">
-            View Channel <ArrowRight className="w-3 h-3" />
-          </a>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {animeVideos.slice(0, 6).map(v => <VideoCard key={v.id} video={v} />)}
-        </div>
-      </section>
+      {/* ═══ 4 PILLARS — Big alternating cards (image left/right) ═══ */}
+      {PILLARS.map((p, i) => (
+        <BigPillarCard key={p.number} pillar={p} index={i} onAI={() => setShowTools(true)} />
+      ))}
 
-      {/* ═══ NATURAL/HUMAN STYLE VIDEOS — 2 rows × 3 ═══ */}
-      {humanVideos.length > 0 && (
-        <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mb-16">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <Film className="w-4 h-4 text-cyan-400" /> Natural Style Content
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {humanVideos.slice(0, 6).map(v => <VideoCard key={v.id} video={v} />)}
-          </div>
-        </section>
-      )}
-
-      </div>{/* end of red glow wrapper */}
-
-      {/* ═══ FEATURES — DRAMATIC ═══ */}
-      <section className="relative py-20 overflow-hidden">
-        {/* Dramatic background glow */}
-        <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 70% 50% at 50% 50%, rgba(120, 20, 20, 0.08) 0%, transparent 70%)" }} />
-        {/* Animated gradient line */}
-        <div className="absolute top-0 left-0 right-0 h-px" style={{ background: "linear-gradient(90deg, transparent 0%, rgba(220,40,40,0.3) 20%, rgba(220,40,40,0.5) 50%, rgba(220,40,40,0.3) 80%, transparent 100%)" }} />
-
-        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-14">
-            <p className="text-red-500 text-xs font-bold uppercase tracking-[0.3em] mb-3">POWERFUL FEATURES</p>
-            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-3">Why <span className="text-red-500">REKVON</span>?</h2>
-            <p className="text-white/40 text-sm max-w-md mx-auto">Everything you need to create professional content — powered by cutting-edge AI.</p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {FEATURES.map((f, i) => {
-              const Icon = f.icon;
-              const gradientMap: Record<string, string> = {
-                "text-violet-400": "from-violet-500 to-violet-400",
-                "text-cyan-400": "from-cyan-500 to-cyan-400",
-                "text-emerald-400": "from-emerald-500 to-emerald-400",
-                "text-orange-400": "from-orange-500 to-orange-400",
-                "text-amber-400": "from-amber-500 to-amber-400",
-                "text-rose-400": "from-rose-500 to-rose-400",
-              };
-              return (
-                <div key={f.title} className="feature-card group relative rounded-2xl p-6 overflow-hidden border border-white/[0.06] hover:border-red-500/30 transition-all duration-700 hover:translate-y-[-6px]"
-                  style={{ background: "linear-gradient(160deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%)", animationDelay: `${i * 700}ms` }}>
-
-                  {/* Auto glow effect */}
-                  <div className="absolute inset-0"
-                    style={{ background: "radial-gradient(ellipse at center, rgba(220,40,40,0.04) 0%, transparent 70%)", animation: `featureGlow 4s ease-in-out infinite ${i * 0.7}s` }} />
-
-                  {/* Top accent line — auto animates */}
-                  <div className={`feature-line absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r ${gradientMap[f.color] || "from-red-500 to-red-400"}`}
-                    style={{ animationDelay: `${i * 0.5}s` }} />
-
-                  <div className="relative">
-                    <div className={`feature-icon w-12 h-12 rounded-xl ${f.bg} flex items-center justify-center mb-5`}
-                      style={{ animationDelay: `${i * 0.3}s` }}>
-                      <Icon className={`w-6 h-6 ${f.color}`} />
-                    </div>
-                    <h3 className="text-base font-bold text-white mb-2">{f.title}</h3>
-                    <p className="text-[13px] text-white/40 leading-relaxed">{f.description}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Bottom gradient line */}
-        <div className="absolute bottom-0 left-0 right-0 h-px" style={{ background: "linear-gradient(90deg, transparent 0%, rgba(220,40,40,0.2) 30%, rgba(220,40,40,0.3) 50%, rgba(220,40,40,0.2) 70%, transparent 100%)" }} />
-      </section>
-
-      {/* ═══ REVIEWS — CINEMATIC ═══ */}
-      <section className="relative py-20 overflow-hidden">
-        {/* Background atmosphere */}
-        <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 60% 40% at 30% 50%, rgba(220, 40, 40, 0.05) 0%, transparent 60%), radial-gradient(ellipse 40% 40% at 70% 60%, rgba(200, 100, 20, 0.04) 0%, transparent 60%)" }} />
-
-        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-14">
-            <p className="text-amber-500 text-xs font-bold uppercase tracking-[0.3em] mb-3">TESTIMONIALS</p>
-            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-3">What Creators <span className="text-amber-400">Say</span></h2>
-            <p className="text-white/40 text-sm max-w-md mx-auto">Real feedback from content creators building with REKVON.</p>
-          </div>
-
-          {/* Desktop: 3 + 2 layout */}
-          <div className="hidden md:grid grid-cols-3 gap-6">
-            {REVIEWS.slice(0, 3).map((review, i) => (
-              <div key={i} className="review-card group relative rounded-2xl p-7 overflow-hidden border border-white/[0.06] hover:border-amber-500/20 transition-all duration-700 hover:translate-y-[-4px]"
-                style={{ background: "linear-gradient(160deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)" }}>
-                {/* Auto glow */}
-                <div className="absolute inset-0"
-                  style={{ background: "radial-gradient(ellipse at top, rgba(250, 200, 50, 0.04) 0%, transparent 60%)", animation: "reviewGlow 5s ease-in-out infinite" }} />
-                <div className="relative">
-                  <div className="flex items-center gap-1 mb-5">
-                    {Array.from({ length: review.stars }).map((_, j) => (
-                      <Star key={j} className="w-4 h-4 text-amber-400 fill-amber-400 star-glow" />
-                    ))}
-                  </div>
-                  <Quote className="w-6 h-6 text-amber-500/20 mb-4" />
-                  <p className="text-[14px] text-white/60 leading-relaxed mb-6 group-hover:text-white/80 transition-colors duration-300">{review.text}</p>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-lg"
-                      style={{ background: `linear-gradient(135deg, ${["#ef4444,#f97316", "#8b5cf6,#6366f1", "#06b6d4,#3b82f6", "#10b981,#059669", "#f59e0b,#ef4444"][i % 5]})` }}>
-                      {review.name[0]}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-white">{review.name}</p>
-                      <p className="text-[11px] text-white/30">{review.role}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="hidden md:grid grid-cols-2 gap-6 mt-6">
-            {REVIEWS.slice(3).map((review, i) => (
-              <div key={i} className="review-card group relative rounded-2xl p-7 overflow-hidden border border-white/[0.06] hover:border-amber-500/20 transition-all duration-700 hover:translate-y-[-4px]"
-                style={{ background: "linear-gradient(160deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)" }}>
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700"
-                  style={{ background: "radial-gradient(ellipse at top, rgba(250, 200, 50, 0.04) 0%, transparent 60%)" }} />
-                <div className="relative">
-                  <div className="flex items-center gap-1 mb-5">
-                    {Array.from({ length: review.stars }).map((_, j) => (
-                      <Star key={j} className="w-4 h-4 text-amber-400 fill-amber-400 star-glow" />
-                    ))}
-                  </div>
-                  <Quote className="w-6 h-6 text-amber-500/20 mb-4" />
-                  <p className="text-[14px] text-white/60 leading-relaxed mb-6 group-hover:text-white/80 transition-colors duration-300">{review.text}</p>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-lg"
-                      style={{ background: `linear-gradient(135deg, ${["#f59e0b,#ef4444", "#10b981,#059669"][i % 2]})` }}>
-                      {review.name[0]}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-white">{review.name}</p>
-                      <p className="text-[11px] text-white/30">{review.role}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Mobile: single carousel */}
-          <div className="md:hidden">
-            <div className="group relative rounded-2xl p-7 overflow-hidden border border-white/[0.06]"
-              style={{ background: "linear-gradient(160deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)" }}>
-              <div className="flex items-center gap-1 mb-5">
-                {Array.from({ length: REVIEWS[reviewIdx].stars }).map((_, j) => (
-                  <Star key={j} className="w-4 h-4 text-amber-400 fill-amber-400 star-glow" />
-                ))}
-              </div>
-              <Quote className="w-6 h-6 text-amber-500/20 mb-4" />
-              <p className="text-[14px] text-white/60 leading-relaxed mb-6">{REVIEWS[reviewIdx].text}</p>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center text-white text-sm font-bold shadow-lg">
-                    {REVIEWS[reviewIdx].name[0]}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-white">{REVIEWS[reviewIdx].name}</p>
-                    <p className="text-[11px] text-white/30">{REVIEWS[reviewIdx].role}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setReviewIdx(prev => prev === 0 ? REVIEWS.length - 1 : prev - 1)} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors">
-                    <ChevronLeft className="w-4 h-4 text-white/50" />
-                  </button>
-                  <button onClick={() => setReviewIdx(prev => (prev + 1) % REVIEWS.length)} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors">
-                    <ChevronRight className="w-4 h-4 text-white/50" />
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center justify-center gap-2 mt-5">
-              {REVIEWS.map((_, i) => (
-                <button key={i} onClick={() => setReviewIdx(i)} className={`h-1.5 rounded-full transition-all duration-300 ${i === reviewIdx ? "bg-amber-400 w-6" : "bg-white/15 w-1.5"}`} />
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* ═══ ABOUT — Bottom ═══ */}
+      <AboutBottom onAI={() => setShowTools(true)} />
 
       {/* ═══ FOOTER ═══ */}
-      <footer className="border-t border-white/[0.05] py-8">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Image src="/rekvon-logo.png" alt="REKVON" width={80} height={20} className="h-4 w-auto opacity-40" />
-            <span className="text-[11px] text-white/20">Studio</span>
+      <footer className="border-t border-white/[0.04] py-10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6">
+          <Image src="/rekvon-logo.png" alt="REKVON" width={100} height={25} className="h-5 w-auto opacity-30" />
+          <div className="flex flex-wrap items-center justify-center gap-6">
+            {[
+              { label: "Creator Services", href: "/services/creators" },
+              { label: "Growth", href: "/services/growth" },
+              { label: "Community", href: "/services/community" },
+              { label: "About", href: "/about" },
+              { label: "Contact", href: "/contact" },
+            ].map(l => <Link key={l.href} href={l.href} className="text-xs text-white/20 hover:text-white/50 transition-colors">{l.label}</Link>)}
+            <button onClick={() => setShowTools(true)} className="text-xs text-white/20 hover:text-white/50 transition-colors">AI Studio</button>
           </div>
-          <div className="flex items-center gap-4">
-            <Link href="/about" className="text-[11px] text-white/30 hover:text-white/60 transition-colors">About Us</Link>
-            <a href="https://www.youtube.com/@REKVON" target="_blank" rel="noopener noreferrer" className="text-[11px] text-white/30 hover:text-white/60 transition-colors">YouTube</a>
-            <Link href="/settings" className="text-[11px] text-white/30 hover:text-white/60 transition-colors">Settings</Link>
-          </div>
-          <p className="text-[11px] text-white/20">AI-Powered Content Creation</p>
+          <p className="text-[10px] text-white/15">© 2026 REKVON</p>
         </div>
       </footer>
     </div>
+  );
+}
+
+// ═══ PILLAR — Full screen section with dramatic animations ═══
+function BigPillarCard({ pillar, index, onAI }: { pillar: typeof PILLARS[0]; index: number; onAI: () => void }) {
+  const { ref, vis } = useReveal(0.12);
+  const Icon = pillar.icon;
+  const isEven = index % 2 === 0;
+
+  return (
+    <section ref={ref} className="relative py-16 sm:py-24 overflow-hidden">
+      {/* Background glow */}
+      <div className="absolute inset-0 pointer-events-none transition-opacity duration-1000" style={{ opacity: vis ? 1 : 0, background: `radial-gradient(ellipse 60% 50% at ${isEven ? "30%" : "70%"} 50%, ${pillar.glow} 0%, transparent 65%)` }} />
+
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className={`flex flex-col ${isEven ? "lg:flex-row" : "lg:flex-row-reverse"} gap-8 lg:gap-0 rounded-2xl overflow-hidden border border-white/[0.06] transition-all duration-700 ${vis ? "opacity-100 translate-y-0" : "opacity-0 translate-y-16"}`}
+          style={{ background: "linear-gradient(160deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)" }}>
+
+          {/* IMAGE/VISUAL SIDE */}
+          <div className={`lg:w-1/2 relative min-h-[280px] sm:min-h-[350px] flex items-center justify-center overflow-hidden transition-all duration-[1000ms] delay-300 ${vis ? "opacity-100 scale-100" : "opacity-0 scale-90"}`}
+            style={{ background: `radial-gradient(ellipse at center, ${pillar.glow} 0%, transparent 70%)` }}>
+
+            {/* Big number background */}
+            <span className="absolute text-[160px] sm:text-[220px] font-black select-none leading-none"
+              style={{ color: "transparent", WebkitTextStroke: `1px ${pillar.accent}15`, opacity: vis ? 1 : 0, transition: "opacity 1s ease 0.5s" }}>
+              {pillar.number}
+            </span>
+
+            {/* Floating icon */}
+            <div className={`relative z-10 w-28 h-28 sm:w-36 sm:h-36 rounded-[1.5rem] bg-gradient-to-br ${pillar.gradient} flex items-center justify-center shadow-2xl`}
+              style={{ boxShadow: `0 0 50px ${pillar.glow}, 0 0 100px ${pillar.glow}`, animation: "iconFloat 4s ease-in-out infinite" }}>
+              <Icon className="w-14 h-14 sm:w-18 sm:h-18 text-white" />
+            </div>
+          </div>
+
+          {/* TEXT SIDE */}
+          <div className="lg:w-1/2 p-6 sm:p-10 lg:p-12 flex flex-col justify-center">
+            <div className={`transition-all duration-700 delay-200 ${vis ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
+              <p className="text-[10px] font-bold uppercase tracking-[0.35em] mb-3" style={{ color: pillar.accent }}>{pillar.subtitle}</p>
+            </div>
+
+            <div className={`transition-all duration-700 delay-300 ${vis ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
+              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-4 leading-tight whitespace-pre-line">{pillar.title}</h2>
+            </div>
+
+            <div className={`transition-all duration-700 delay-[400ms] ${vis ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
+              <p className="text-white/40 text-sm sm:text-base leading-relaxed mb-6">{pillar.description}</p>
+            </div>
+
+            {/* Feature pills */}
+            <div className={`flex flex-wrap gap-2 mb-8 transition-all duration-700 delay-500 ${vis ? "opacity-100" : "opacity-0"}`}>
+              {pillar.features.map((f, j) => (
+                <span key={f} className="px-3 py-1.5 rounded-full text-[11px] font-medium border transition-all duration-500"
+                  style={{
+                    borderColor: `${pillar.accent}20`, color: pillar.accent, background: `${pillar.accent}08`,
+                    transitionDelay: `${600 + j * 100}ms`,
+                    opacity: vis ? 1 : 0, transform: vis ? "translateY(0)" : "translateY(10px)",
+                  }}>
+                  {f}
+                </span>
+              ))}
+            </div>
+
+            {/* CTA */}
+            <div className={`transition-all duration-700 delay-[700ms] ${vis ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
+              {pillar.isAI ? (
+                <button onClick={onAI} className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white text-sm font-semibold transition-all hover:scale-105"
+                  style={{ background: `linear-gradient(135deg, ${pillar.accent}, ${pillar.accent}bb)`, boxShadow: `0 4px 25px ${pillar.glow}` }}>
+                  Open AI Studio <ArrowRight className="w-4 h-4" />
+                </button>
+              ) : (
+                <Link href={pillar.href} className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white text-sm font-semibold transition-all hover:scale-105"
+                  style={{ background: `linear-gradient(135deg, ${pillar.accent}, ${pillar.accent}bb)`, boxShadow: `0 4px 25px ${pillar.glow}` }}>
+                  Learn More <ArrowRight className="w-4 h-4" />
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ═══ ABOUT BOTTOM ═══
+function AboutBottom({ onAI }: { onAI: () => void }) {
+  const { ref, vis } = useReveal(0.15);
+
+  return (
+    <section ref={ref} className="relative py-28 overflow-hidden snap-start">
+      <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 50% 40% at 50% 50%, rgba(220,30,30,0.06) 0%, transparent 60%)" }} />
+      <div className="absolute top-0 left-0 right-0 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(220,40,40,0.2), transparent)" }} />
+
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <div className={`transition-all duration-700 ${vis ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10"}`}>
+          <p className="text-red-500/80 text-[10px] font-bold uppercase tracking-[0.4em] mb-5">ABOUT REKVON</p>
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-8 leading-tight">
+            We Create What Others<br /><span className="text-red-500">Can&apos;t.</span>
+          </h2>
+        </div>
+
+        <div className={`transition-all duration-700 delay-200 ${vis ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
+          <p className="text-white/40 text-base sm:text-lg leading-relaxed max-w-2xl mx-auto mb-12">
+            REKVON is a full-service creator platform. We turn raw ideas into cinematic content, grow channels from zero to millions, and build communities that keep audiences coming back.
+          </p>
+        </div>
+
+        <div className={`flex flex-wrap items-center justify-center gap-4 mb-16 transition-all duration-700 delay-[400ms] ${vis ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
+          <Link href="/about" className="px-6 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-sm font-semibold transition-all border border-white/10 inline-flex items-center gap-2">
+            Our Story <ArrowRight className="w-4 h-4" />
+          </Link>
+          <Link href="/contact" className="px-6 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-sm font-semibold transition-all shadow-lg shadow-red-600/25 inline-flex items-center gap-2">
+            <Mail className="w-4 h-4" /> Get in Touch
+          </Link>
+        </div>
+
+        {/* Stats */}
+        <div className={`grid grid-cols-2 sm:grid-cols-4 gap-8 transition-all duration-700 delay-[600ms] ${vis ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
+          {[{ v: "4", l: "Services" }, { v: "44+", l: "AI Voices" }, { v: "3", l: "AI Providers" }, { v: "24/7", l: "Support" }].map(s => (
+            <div key={s.l} className="text-center">
+              <p className="text-3xl sm:text-4xl font-bold text-red-500 mb-1">{s.v}</p>
+              <p className="text-[10px] text-white/25 uppercase tracking-widest">{s.l}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
