@@ -58,7 +58,14 @@ export default function Home() {
 
   const handleVideoEnd = useCallback(() => {
     setIntroFading(true);
-    setTimeout(() => { setShowIntro(false); sessionStorage.setItem("rekvon_intro_played", "1"); }, 500);
+    setTimeout(() => {
+      setShowIntro(false);
+      sessionStorage.setItem("rekvon_intro_played", "1");
+      // Check if page was already loaded before (same session)
+      if (!sessionStorage.getItem("rekvon_loaded")) {
+        setIsLoading(true);
+      }
+    }, 500);
   }, []);
 
   useEffect(() => {
@@ -74,6 +81,9 @@ export default function Home() {
   // Track video time for card reveals (MUST be before any conditional returns)
   const [videoTime, setVideoTime] = useState(0);
   const heroVideoRef = useRef<HTMLVideoElement>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadProgress, setLoadProgress] = useState(0);
+  const [loadComplete, setLoadComplete] = useState(false);
 
   useEffect(() => {
     const v = heroVideoRef.current;
@@ -81,7 +91,28 @@ export default function Home() {
     const handleTime = () => setVideoTime(v.currentTime);
     v.addEventListener("timeupdate", handleTime);
     return () => v.removeEventListener("timeupdate", handleTime);
-  }, [showIntro, showTools]);
+  }, [showIntro, showTools, isLoading]);
+
+  // After intro ends → start loading animation
+  useEffect(() => {
+    if (!isLoading) return;
+    let progress = 0;
+    const interval = setInterval(() => {
+      // Fast start, slow middle, fast end
+      if (progress < 30) progress += Math.random() * 8 + 4;
+      else if (progress < 70) progress += Math.random() * 3 + 1;
+      else if (progress < 90) progress += Math.random() * 5 + 2;
+      else progress += Math.random() * 3 + 1;
+
+      if (progress >= 100) {
+        progress = 100;
+        clearInterval(interval);
+        setTimeout(() => { setLoadComplete(true); sessionStorage.setItem("rekvon_loaded", "1"); setTimeout(() => setIsLoading(false), 600); }, 400);
+      }
+      setLoadProgress(Math.min(100, Math.round(progress)));
+    }, 80);
+    return () => clearInterval(interval);
+  }, [isLoading]);
 
   // ═══ INTRO SPLASH ═══
   if (showIntro) {
@@ -90,6 +121,43 @@ export default function Home() {
         <video ref={introVideoRef} src="/intro.mp4" autoPlay playsInline onEnded={handleVideoEnd}
           onError={() => { setShowIntro(false); sessionStorage.setItem("rekvon_intro_played", "1"); }}
           className="w-full h-full object-contain" />
+      </div>
+    );
+  }
+
+  // ═══ LOADING SCREEN ═══
+  if (isLoading) {
+    return (
+      <div className={`fixed inset-0 z-[9998] bg-[#0a0a0a] flex flex-col items-center justify-center transition-opacity duration-500 ${loadComplete ? "opacity-0" : "opacity-100"}`}>
+        {/* REKVON logo */}
+        <Image src="/rekvon-logo.png" alt="REKVON" width={200} height={50} className="h-10 w-auto mb-12 opacity-60" />
+
+        {/* Percentage counter */}
+        <div className="relative mb-8">
+          <span className="text-6xl sm:text-7xl font-black text-white tabular-nums" style={{ fontVariantNumeric: "tabular-nums" }}>
+            {loadProgress}
+          </span>
+          <span className="text-2xl font-light text-white/30 ml-1">%</span>
+        </div>
+
+        {/* Progress bar */}
+        <div className="w-64 sm:w-80 h-[2px] bg-white/[0.06] rounded-full overflow-hidden mb-6">
+          <div className="h-full rounded-full transition-all duration-200 ease-out"
+            style={{ width: `${loadProgress}%`, background: "linear-gradient(90deg, #ef4444, #f97316, #ef4444)" }} />
+        </div>
+
+        {/* Loading text */}
+        <p className="text-[10px] text-white/20 uppercase tracking-[0.3em]">
+          {loadProgress < 30 ? "Initializing" : loadProgress < 60 ? "Loading assets" : loadProgress < 90 ? "Preparing experience" : "Almost ready"}
+        </p>
+
+        {/* Animated dots */}
+        <div className="flex gap-1.5 mt-6">
+          {[0, 1, 2].map(i => (
+            <div key={i} className="w-1.5 h-1.5 rounded-full bg-red-500/60"
+              style={{ animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite` }} />
+          ))}
+        </div>
       </div>
     );
   }
