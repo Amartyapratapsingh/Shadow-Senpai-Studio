@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import Link from "next/link";
 import Image from "next/image";
 import { Wand2, ListOrdered, Volume2, Film, ArrowRight, ArrowDown, Play, ImageIcon, X, Cpu, TrendingUp, MessageSquare, Mail } from "lucide-react";
+import FallingStars from "@/components/FallingStars";
 
 // AI tools overlay
 const ALL_TOOLS = [
@@ -194,10 +195,8 @@ export default function Home() {
   return (
     <div className="bg-[#0a0a0a] text-white overflow-x-hidden">
 
-      {/* ═══ HERO — Cinematic video with logo + auto-revealing cards ═══ */}
-      <section className="relative min-h-[200vh] overflow-hidden">
-        {/* Sticky video container */}
-        <div className="sticky top-0 h-screen overflow-hidden">
+      {/* ═══ HERO — Cinematic video ═══ */}
+      <section className="relative h-screen overflow-hidden" style={{ zIndex: 20 }}>
           {/* Video background — plays once, stops at end */}
           <video ref={heroVideoRef} src="/hero-bg.mp4" autoPlay muted playsInline
             className="absolute inset-0 w-full h-full object-cover" />
@@ -227,13 +226,24 @@ export default function Home() {
 
           {/* Bottom fade to black */}
           <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#0a0a0a] to-transparent z-[5]" />
-        </div>
       </section>
 
-      {/* ═══ 4 PILLARS — Big alternating cards (image left/right) ═══ */}
+      {/* ═══ 4 PILLARS — Big alternating cards with gif background + stars ═══ */}
+      <div className="relative overflow-hidden">
+        {/* GIF background */}
+        <div className="absolute inset-0 z-0">
+          <img src="/bg-loop.gif" alt="" className="w-full h-full object-cover opacity-50" />
+          <div className="absolute inset-0 bg-[#0a0a0a]/50" />
+        </div>
+        {/* Falling stars — only in this section */}
+        <FallingStars />
+        <div className="relative z-[1]">
       {PILLARS.map((p, i) => (
         <BigPillarCard key={p.number} pillar={p} index={i} onAI={() => setShowTools(true)} />
       ))}
+
+        </div>
+      </div>
 
       {/* ═══ ABOUT — Bottom ═══ */}
       <AboutBottom onAI={() => setShowTools(true)} />
